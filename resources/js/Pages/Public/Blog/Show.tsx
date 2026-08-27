@@ -155,7 +155,7 @@ export default function BlogShow({ post, relatedPosts = [], navigation, footerNa
                     <div className="space-y-5">
                         <div className="flex items-center gap-2.5 flex-wrap">
                             <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-50 border border-emerald-200 text-emerald-800">
-                                {post.category}
+                                {((typeof post.category === "object" && post.category !== null) ? ((post.category as any).category || (post.category as any).title || (post.category as any).name || "General") : (post.category || "General"))}
                             </span>
                             <span className="text-xs text-slate-400">•</span>
                             <span className="flex items-center gap-1 text-xs text-slate-500 font-medium">
@@ -272,7 +272,7 @@ export default function BlogShow({ post, relatedPosts = [], navigation, footerNa
                                         className="p-6 rounded-3xl bg-white border border-slate-200 hover:border-emerald-300 hover:shadow-md transition-all space-y-3 group"
                                     >
                                         <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                                            {rel.category}
+                                            {((typeof rel.category === "object" && rel.category !== null) ? ((rel.category as any).category || (rel.category as any).title || (rel.category as any).name || "General") : (rel.category || "General"))}
                                         </span>
                                         <h4 className="text-base font-bold text-slate-950 group-hover:text-emerald-700 transition-colors leading-snug">
                                             {rel.title}

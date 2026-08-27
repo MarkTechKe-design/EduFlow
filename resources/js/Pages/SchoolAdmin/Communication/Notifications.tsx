@@ -1,4 +1,3 @@
-import DOMPurify from 'dompurify';
 import AppLayout from '@/Layouts/AppLayout';
 import { router } from '@inertiajs/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -93,7 +92,7 @@ export default function Notifications({ notifications, unread_count }: Props) {
                         {notifications.links.map((link, i) => (
                             <Button key={i} size="sm" variant={link.active ? 'default' : 'outline'} disabled={!link.url}
                                 onClick={() => link.url && router.visit(link.url)}
-                                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(link.label ) }} />
+                                children={link.label.replace(/<[^>]*>/g, '')} />
                         ))}
                     </div>
                 )}

@@ -98,6 +98,10 @@ class AppServiceProvider extends ServiceProvider
             ->by(Str::lower((string) $request->input('email')).'|'.($request->ip() ?? 'unknown')));
         RateLimiter::for('password-reset-submit', fn (Request $request) => Limit::perMinute(5)
             ->by(Str::lower((string) $request->input('email')).'|'.($request->ip() ?? 'unknown')));
+        RateLimiter::for('uploads', fn (Request $request) => Limit::perMinute(20)
+            ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip() ?? 'unknown')));
+        RateLimiter::for('webhooks', fn (Request $request) => Limit::perMinute(120)
+            ->by((string) ($request->ip() ?? 'unknown')));
         RateLimiter::for('public-admission', function (Request $request) {
             $school = $request->route('school');
             $schoolKey = is_object($school) && method_exists($school, 'getKey')

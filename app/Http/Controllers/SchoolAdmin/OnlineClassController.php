@@ -11,7 +11,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -36,7 +36,7 @@ class OnlineClassController extends Controller
         } elseif ($user->hasRole('student')) {
             $student = Student::where('user_id', $user->id)->where('school_id', $schoolId)->first();
             if ($student) {
-                $query->where(function ($q) use ($student) {
+                $query->where(function ($q) {
                     $q->where('meeting_type', 'classroom')
                       ->orWhereNull('meeting_type');
                 })
@@ -77,8 +77,7 @@ class OnlineClassController extends Controller
         $subjectsList = Subject::where('school_id', $schoolId)->orderBy('name')->get(['id', 'name']);
         $teachersList = User::where('school_id', $schoolId)->role('teacher')->get(['id', 'name']);
 
-        $sessions = $query->orderByRaw("FIELD(status, 'live', 'scheduled', 'completed', 'cancelled')")
-            ->orderBy('scheduled_at', 'desc')
+        $sessions = $query->orderBy('scheduled_at', 'desc')
             ->paginate(15)
             ->withQueryString();
 
@@ -107,7 +106,7 @@ class OnlineClassController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = $request->user();
-        abort_unless($user->hasRole(['super-admin', 'school-admin', 'principal', 'teacher']), 403);
+        abort_unless($user && $user->hasRole(['super-admin', 'school-admin', 'principal', 'teacher']), 403);
 
         $schoolId = $user->school_id;
 
@@ -132,6 +131,8 @@ class OnlineClassController extends Controller
         $validated['created_by']   = $user->id;
         $validated['status']       = 'scheduled';
         $validated['teacher_id']   = !empty($validated['teacher_id']) ? $validated['teacher_id'] : $user->id;
+        $validated['meeting_id']   = 'EduFlow_' . Str::random(12);
+        $validated['room_token']   = Str::random(64);
 
         try {
             $validated['scheduled_at'] = Carbon::parse($validated['scheduled_at']);
@@ -141,7 +142,8 @@ class OnlineClassController extends Controller
 
         $session = OnlineClass::create($validated);
 
-        return back()->with('success', "Session '{$session->title}' scheduled successfully.");
+        return redirect()->route('school.online-classes.index')
+            ->with('success', "Session '{$session->title}' scheduled successfully.");
     }
 
     public function start(Request $request, OnlineClass $onlineClass): RedirectResponse
@@ -158,7 +160,7 @@ class OnlineClassController extends Controller
             'started_at' => now(),
         ]);
 
-        return redirect()->route('classroom.join', $onlineClass->id);
+        return redirect()->route('school.classroom.join', $onlineClass->id);
     }
 
     public function end(Request $request, OnlineClass $onlineClass): RedirectResponse
@@ -190,6 +192,6 @@ class OnlineClassController extends Controller
         $onlineClass->update(['status' => 'cancelled']);
         $onlineClass->delete();
 
-        return back()->with('success', 'Session cancelled.');
+        return redirect()->route('school.online-classes.index')->with('success', 'Session cancelled.');
     }
 }

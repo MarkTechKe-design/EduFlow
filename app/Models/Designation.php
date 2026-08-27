@@ -12,7 +12,18 @@ class Designation extends Model
 {
     use BelongsToSchool, SoftDeletes;
 
-    protected $fillable = ['school_id', 'department_id', 'name', 'description'];
+    protected $fillable = [
+        'school_id',
+        'department_id',
+        'name',
+        'cadre',
+        'is_leadership',
+        'description',
+    ];
+
+    protected $casts = [
+        'is_leadership' => 'boolean',
+    ];
 
     public function department(): BelongsTo
     {

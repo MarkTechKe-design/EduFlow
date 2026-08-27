@@ -1,4 +1,3 @@
-import DOMPurify from 'dompurify';
 import AppLayout from '@/Layouts/AppLayout';
 import { router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -174,7 +173,7 @@ export default function FinanceReport({ collected, outstanding, payroll, dailyCh
                         {payments.links.map((link, i) => (
                             <Button key={i} size="sm" variant={link.active ? 'default' : 'outline'} disabled={!link.url}
                                 onClick={() => link.url && router.visit(link.url)}
-                                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(link.label ) }} />
+                                children={link.label.replace(/<[^>]*>/g, '')} />
                         ))}
                     </div>
                 )}

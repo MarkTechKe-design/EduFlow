@@ -417,14 +417,14 @@ export default function AboutView({ branding, sections = [] }: Props) {
                                     </div>
 
                                     <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-                                        <button
+                                        <Link href="/register-school"
                                             type="button"
-                                            onClick={() => setSelectedMember(member)}
+                                            onClick={() =>setSelectedMember(member)}
                                             className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline transition-colors"
                                         >
                                             <span>Read Full Bio</span>
                                             <ChevronRight className="w-3.5 h-3.5" />
-                                        </button>
+                                        </Link>
 
                                         <div className="flex items-center gap-2">
                                             {member.socials?.linkedin && (

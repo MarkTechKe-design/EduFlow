@@ -7,288 +7,274 @@ use App\Models\Book;
 use App\Models\BookIssue;
 use App\Models\Staff;
 use App\Models\Student;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
+use Inertia\Response;
 
 class LibraryController extends Controller
 {
-    // ── Book Catalog ──────────────────────────────────────────────
-
-    public function index(Request $request)
+    public function index(Request $request): Response
     {
-        $this->authorize('viewAny', Book::class);
-
         $sid = $this->getSchoolId();
 
         $books = Book::where('school_id', $sid)
-            ->when($request->search,   fn ($q) => $q->where(fn ($q2) =>
-                $q2->where('title', 'like', "%{$request->search}%")
-                   ->orWhere('author', 'like', "%{$request->search}%")
-                   ->orWhere('isbn', 'like', "%{$request->search}%")
-            ))
-            ->when($request->category, fn ($q) => $q->where('category', $request->category))
-            ->when($request->available === 'yes', fn ($q) => $q->where('available_copies', '>', 0))
-            ->withCount(['issues' => fn ($q) => $q->where('status', 'issued')])
+            ->when($request->search, function ($q, $search) {
+                $q->where(function ($sq) use ($search) {
+                    $sq->where('title', 'like', "%{$search}%")
+                       ->orWhere('author', 'like', "%{$search}%")
+                       ->orWhere('isbn', 'like', "%{$search}%");
+                });
+            })
+            ->when($request->category && $request->category !== 'all', fn ($q) => $q->where('category', $request->category))
             ->orderBy('title')
-            ->paginate(20)
+            ->paginate(15, ['*'], 'books_page')
             ->withQueryString();
+
+        $issues = BookIssue::with(['book:id,title,author,isbn,location'])
+            ->where('school_id', $sid)
+            ->when($request->status && $request->status !== 'all', fn ($q) => $q->where('status', $request->status))
+            ->latest('issued_date')
+            ->paginate(15, ['*'], 'issues_page')
+            ->withQueryString();
+
+        $issues->getCollection()->transform(function ($issue) use ($sid) {
+            if ($issue->member_type === 'student' || $issue->member_type === Student::class) {
+                $student = Student::where('school_id', $sid)->find($issue->member_id);
+                $issue->member_name = $student ? "{$student->first_name} {$student->last_name} ({$student->admission_no})" : "Student #{$issue->member_id}";
+                $issue->member_class = $student?->schoolClass?->name ?? '—';
+            } else {
+                $staff = Staff::where('school_id', $sid)->find($issue->member_id);
+                $issue->member_name = $staff ? "{$staff->first_name} {$staff->last_name} (Staff)" : "Staff #{$issue->member_id}";
+                $issue->member_class = 'Staff Member';
+            }
+            return $issue;
+        });
+
+        $totalCopies = Book::where('school_id', $sid)->sum('total_copies');
+        $availableCopies = Book::where('school_id', $sid)->sum('available_copies');
+        $issuedCount = BookIssue::where('school_id', $sid)->where('status', 'issued')->count();
+        $overdueCount = BookIssue::where('school_id', $sid)->where('status', 'issued')->where('due_date', '<', Carbon::today()->toDateString())->count();
+        
+        $lostUnpaidQuery = BookIssue::where('school_id', $sid)->where('status', 'lost');
+        if (Schema::hasColumn('book_issues', 'fine_status')) {
+            $lostUnpaidQuery->where('fine_status', 'unpaid');
+        }
+        $lostUnpaidCount = $lostUnpaidQuery->count();
+
+        $stats = [
+            'total_titles'     => Book::where('school_id', $sid)->count(),
+            'total_copies'     => (int) $totalCopies,
+            'available_copies' => (int) $availableCopies,
+            'currently_issued' => $issuedCount,
+            'overdue_count'    => $overdueCount,
+            'lost_unpaid'      => $lostUnpaidCount,
+        ];
 
         $categories = Book::where('school_id', $sid)
             ->whereNotNull('category')
             ->distinct()
-            ->pluck('category')
-            ->sort()
-            ->values();
+            ->pluck('category');
 
-        $stats = [
-            'total_books'    => Book::where('school_id', $sid)->sum('total_copies'),
-            'available'      => Book::where('school_id', $sid)->sum('available_copies'),
-            'issued_count'   => BookIssue::where('school_id', $sid)->where('status', 'issued')->count(),
-            'overdue_count'  => BookIssue::where('school_id', $sid)->where('status', 'overdue')->count(),
-        ];
-
-        return Inertia::render('SchoolAdmin/Library/Books', [
+        return Inertia::render('SchoolAdmin/Library/Index', [
             'books'      => $books,
+            'issues'     => $issues,
             'categories' => $categories,
-            'filters'    => $request->only('search', 'category', 'available'),
+            'students'   => Student::where('school_id', $sid)->where('status', 'active')->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'admission_no']),
+            'staffList'  => Staff::where('school_id', $sid)->where('status', 'active')->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'emp_id']),
             'stats'      => $stats,
+            'filters'    => $request->only('search', 'category', 'status'),
         ]);
     }
 
-    public function store(Request $request)
+    public function issues(Request $request): Response
     {
-        $this->authorize('create', Book::class);
+        return $this->index($request);
+    }
 
-        $data = $request->validate([
-            'isbn'             => 'nullable|string|max:20',
+    public function overdue(Request $request): Response
+    {
+        $request->merge(['status' => 'overdue']);
+        return $this->index($request);
+    }
+
+    public function storeBook(Request $request): RedirectResponse
+    {
+        $sid = $this->getSchoolId();
+
+        $validated = $request->validate([
             'title'            => 'required|string|max:255',
-            'author'           => 'required|string|max:200',
+            'author'           => 'required|string|max:255',
+            'isbn'             => 'nullable|string|max:50',
+            'publisher'        => 'nullable|string|max:255',
             'category'         => 'nullable|string|max:100',
-            'publisher'        => 'nullable|string|max:200',
-            'publication_year' => 'nullable|integer|min:1900|max:2099',
-            'location'         => 'nullable|string|max:100',
+            'edition'          => 'nullable|string|max:50',
             'total_copies'     => 'required|integer|min:1',
+            'location'         => 'nullable|string|max:100',
+            'price'            => 'nullable|numeric|min:0',
             'description'      => 'nullable|string',
         ]);
 
-        $data['available_copies'] = $data['total_copies'];
-        $data['school_id']        = $this->getSchoolId();
+        $validated['school_id'] = $sid;
+        $validated['available_copies'] = $validated['total_copies'];
+        $validated['is_active'] = true;
 
-        Book::create($data);
+        Book::create($validated);
 
-        return back()->with('success', 'Book added to catalog.');
+        return redirect('/school/library/books')
+            ->with('success', 'Book added to library successfully.');
     }
 
-    public function update(Request $request, Book $book)
+    public function updateBook(Request $request, Book $book): RedirectResponse
     {
-        $this->authorize('update', $book);
+        $sid = $this->getSchoolId();
+        abort_unless((int) $book->school_id === $sid, 404);
 
-        $data = $request->validate([
-            'isbn'             => 'nullable|string|max:20',
-            'title'            => 'required|string|max:255',
-            'author'           => 'required|string|max:200',
-            'category'         => 'nullable|string|max:100',
-            'publisher'        => 'nullable|string|max:200',
-            'publication_year' => 'nullable|integer|min:1900|max:2099',
-            'location'         => 'nullable|string|max:100',
-            'total_copies'     => 'required|integer|min:1',
-            'description'      => 'nullable|string',
-            'is_active'        => 'boolean',
+        $validated = $request->validate([
+            'title'        => 'required|string|max:255',
+            'author'       => 'required|string|max:255',
+            'isbn'         => 'nullable|string|max:50',
+            'publisher'    => 'nullable|string|max:255',
+            'category'     => 'nullable|string|max:100',
+            'edition'      => 'nullable|string|max:50',
+            'total_copies' => 'required|integer|min:1',
+            'location'     => 'nullable|string|max:100',
+            'price'        => 'nullable|numeric|min:0',
+            'description'  => 'nullable|string',
         ]);
 
-        // Adjust available_copies based on total_copies change
-        $diff = (int)$data['total_copies'] - $book->total_copies;
-        $data['available_copies'] = max(0, $book->available_copies + $diff);
+        $book->update($validated);
 
-        $book->update($data);
-
-        return back()->with('success', 'Book updated.');
+        return redirect('/school/library/books')
+            ->with('success', 'Book updated successfully.');
     }
 
-    public function destroy(Book $book)
+    public function destroyBook(Book $book): RedirectResponse
     {
-        $this->authorize('delete', $book);
+        $sid = $this->getSchoolId();
+        abort_unless((int) $book->school_id === $sid, 404);
 
         $book->delete();
-        return back()->with('success', 'Book removed from catalog.');
+
+        return redirect('/school/library/books')
+            ->with('success', 'Book removed from library.');
     }
 
-    // ── Issue & Return ────────────────────────────────────────────
-
-    public function issues(Request $request)
+    public function issueBook(Request $request): RedirectResponse
     {
-        $this->authorize('viewAny', BookIssue::class);
-
         $sid = $this->getSchoolId();
 
-        // Mark overdue automatically
-        BookIssue::where('school_id', $sid)
-            ->where('status', 'issued')
-            ->where('due_date', '<', now()->toDateString())
-            ->update(['status' => 'overdue']);
-
-        $issues = BookIssue::with(['book:id,title,author,isbn'])
-            ->where('school_id', $sid)
-            ->when($request->status,      fn ($q) => $q->where('status', $request->status))
-            ->when($request->member_type, fn ($q) => $q->where('member_type', $request->member_type === 'student'
-                ? 'App\\Models\\Student' : 'App\\Models\\Staff'))
-            ->latest()
-            ->paginate(25)
-            ->withQueryString();
-
-        // Load member names manually (polymorphic)
-        $issues->getCollection()->each(function ($issue) {
-            if ($issue->member_type === 'App\\Models\\Student') {
-                $issue->member_name = Student::find($issue->member_id)?->full_name ?? 'Unknown';
-                $issue->member_id_no = Student::find($issue->member_id)?->admission_no ?? '';
-            } else {
-                $m = Staff::find($issue->member_id);
-                $issue->member_name  = $m ? ($m->first_name . ' ' . $m->last_name) : 'Unknown';
-                $issue->member_id_no = $m?->emp_id ?? '';
-            }
-            $issue->member_type_label = str_contains($issue->member_type, 'Student') ? 'Student' : 'Staff';
-        });
-
-        return Inertia::render('SchoolAdmin/Library/Issues', [
-            'issues'   => $issues,
-            'books'    => Book::where('school_id', $sid)->where('is_active', true)->where('available_copies', '>', 0)
-                             ->orderBy('title')->get(['id', 'title', 'author', 'available_copies', 'isbn']),
-            'students' => Student::where('school_id', $sid)->where('status', 'active')
-                             ->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'admission_no']),
-            'staffList'=> Staff::where('school_id', $sid)->where('status', 'active')
-                             ->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'emp_id']),
-            'filters'  => $request->only('status', 'member_type'),
-        ]);
-    }
-
-    public function issueBook(Request $request)
-    {
-        $data = $request->validate([
-            'book_id'      => 'required|integer',
-            'member_type'  => 'required|in:student,staff',
-            'member_id'    => 'required|integer',
-            'issued_date'  => 'required|date',
-            'due_date'     => 'required|date|after:issued_date',
-            'fine_per_day' => 'nullable|numeric|min:0',
-            'note'         => 'nullable|string|max:500',
+        $validated = $request->validate([
+            'book_id'     => 'required|integer',
+            'member_type' => 'required|string',
+            'member_id'   => 'required|integer',
+            'issued_date' => 'required|date',
+            'due_date'    => 'required|date|after_or_equal:issued_date',
+            'note'        => 'nullable|string',
         ]);
 
-        $sid = $this->getSchoolId();
-        $book = Book::query()
-            ->whereKey($data['book_id'])
-            ->where('school_id', $sid)
-            ->firstOrFail();
-        $this->assertMemberOwnership($data['member_type'], (int) $data['member_id'], $sid);
-        $this->authorize('issue', BookIssue::class);
+        $book = Book::where('school_id', $sid)->findOrFail($validated['book_id']);
 
         if ($book->available_copies < 1) {
-            return back()->withErrors(['book_id' => 'No copies available.']);
+            return back()->withErrors(['book_id' => 'No copies of this book are currently available for issue.']);
         }
 
-        $memberClass = $data['member_type'] === 'student' ? 'App\\Models\\Student' : 'App\\Models\\Staff';
+        if (in_array($validated['member_type'], ['student', Student::class], true)) {
+            Student::where('school_id', $sid)->findOrFail($validated['member_id']);
+            $memberClass = Student::class;
+        } else {
+            Staff::where('school_id', $sid)->findOrFail($validated['member_id']);
+            $memberClass = Staff::class;
+        }
 
-        DB::transaction(function () use ($data, $sid, $book, $memberClass) {
-            BookIssue::create([
-                'school_id'   => $sid,
-                'book_id'     => $data['book_id'],
-                'member_type' => $memberClass,
-                'member_id'   => $data['member_id'],
-                'issued_date' => $data['issued_date'],
-                'due_date'    => $data['due_date'],
-                'fine_per_day'=> $data['fine_per_day'] ?? 2.00,
-                'status'      => 'issued',
-                'note'        => $data['note'] ?? null,
-            ]);
+        $noteCol = Schema::hasColumn('book_issues', 'note') ? 'note' : 'notes';
 
-            $book->decrement('available_copies');
-        });
-
-        return back()->with('success', 'Book issued successfully.');
-    }
-
-    public function returnBook(Request $request, BookIssue $bookIssue)
-    {
-        $this->authorize('return', $bookIssue);
-
-        $data = $request->validate([
-            'returned_date' => 'required|date',
-            'note'          => 'nullable|string|max:500',
+        BookIssue::create([
+            'school_id'    => $sid,
+            'book_id'      => $book->id,
+            'member_type'  => $memberClass,
+            'member_id'    => $validated['member_id'],
+            'issued_date'  => $validated['issued_date'],
+            'due_date'     => $validated['due_date'],
+            'status'       => 'issued',
+            'fine_status'  => 'unpaid',
+            'fine_per_day' => 2.00,
+            $noteCol       => $validated['note'] ?? null,
         ]);
 
-        $returnDate = \Carbon\Carbon::parse($data['returned_date']);
-        $dueDate    = $bookIssue->due_date;
-        $overdueDays = max(0, $dueDate->diffInDays($returnDate, false));
-        $fine = $overdueDays > 0 ? round($overdueDays * (float)$bookIssue->fine_per_day, 2) : 0;
+        $book->decrement('available_copies');
 
-        DB::transaction(function () use ($bookIssue, $data, $fine, $returnDate) {
-            $bookIssue->update([
-                'returned_date' => $returnDate->toDateString(),
-                'fine'          => $fine,
-                'status'        => 'returned',
-                'note'          => $data['note'] ?? $bookIssue->note,
-            ]);
-
-            $bookIssue->book->increment('available_copies');
-        });
-
-        $msg = $fine > 0 ? "Book returned. Fine: ৳{$fine}" : 'Book returned successfully.';
-        return back()->with('success', $msg);
+        return redirect('/school/library/books')
+            ->with('success', "Book '{$book->title}' issued successfully.");
     }
 
-    public function overdue(Request $request)
+    public function returnBook(Request $request, BookIssue $issue): RedirectResponse
     {
-        $this->authorize('viewAny', BookIssue::class);
-
         $sid = $this->getSchoolId();
+        abort_unless((int) $issue->school_id === $sid, 404);
 
-        BookIssue::where('school_id', $sid)
-            ->where('status', 'issued')
-            ->where('due_date', '<', now()->toDateString())
-            ->update(['status' => 'overdue']);
-
-        $overdueIssues = BookIssue::with('book:id,title,author,isbn')
-            ->where('school_id', $sid)
-            ->where('status', 'overdue')
-            ->orderBy('due_date')
-            ->get();
-
-        $overdueIssues->each(function ($issue) {
-            $overdueDays = max(0, now()->startOfDay()->diffInDays($issue->due_date->startOfDay(), false));
-            $issue->overdue_days        = $overdueDays;
-            $issue->estimated_fine      = round($overdueDays * (float)$issue->fine_per_day, 2);
-
-            if ($issue->member_type === 'App\\Models\\Student') {
-                $m = Student::find($issue->member_id);
-                $issue->member_name  = $m?->full_name ?? 'Unknown';
-                $issue->member_id_no = $m?->admission_no ?? '';
-                $issue->member_label = 'Student';
-            } else {
-                $m = Staff::find($issue->member_id);
-                $issue->member_name  = $m ? ($m->first_name . ' ' . $m->last_name) : 'Unknown';
-                $issue->member_id_no = $m?->emp_id ?? '';
-                $issue->member_label = 'Staff';
-            }
-        });
-
-        return Inertia::render('SchoolAdmin/Library/Overdue', [
-            'overdue' => $overdueIssues,
-            'summary' => [
-                'count'          => $overdueIssues->count(),
-                'total_fine_est' => $overdueIssues->sum('estimated_fine'),
-            ],
+        $returnDate = $request->input('returned_date', now()->toDateString());
+        $issue->update([
+            'status'        => 'returned',
+            'returned_date' => $returnDate,
         ]);
-    }
-    private function assertMemberOwnership(string $memberType, int $memberId, int $schoolId): void
-    {
-        $modelClass = $memberType === 'student' ? Student::class : Staff::class;
 
-        abort_unless(
-            $modelClass::query()
-                ->whereKey($memberId)
-                ->where('school_id', $schoolId)
-                ->exists(),
-            404
-        );
+        if ($issue->book) {
+            $issue->book->increment('available_copies');
+        }
+
+        return redirect('/school/library/books')
+            ->with('success', 'Book marked as returned.');
+    }
+
+    public function markLost(Request $request, BookIssue $issue): RedirectResponse
+    {
+        $sid = $this->getSchoolId();
+        abort_unless((int) $issue->school_id === $sid, 404);
+
+        $fineAmount = $request->input('fine_amount', 0);
+        $issue->update([
+            'status'      => 'lost',
+            'fine'        => $fineAmount,
+            'fine_amount' => $fineAmount,
+            'fine_status' => 'unpaid',
+        ]);
+
+        return redirect('/school/library/books')
+            ->with('success', 'Book marked as lost.');
+    }
+
+    public function clearFine(Request $request, BookIssue $issue): RedirectResponse
+    {
+        $sid = $this->getSchoolId();
+        abort_unless((int) $issue->school_id === $sid, 404);
+
+        $issue->update([
+            'fine_status'  => 'paid',
+            'fine_paid_at' => now(),
+        ]);
+
+        return redirect('/school/library/books')
+            ->with('success', 'Fine cleared.');
+    }
+
+    public function checkStudentClearance(Student $student): JsonResponse
+    {
+        $sid = $this->getSchoolId();
+        abort_unless((int) $student->school_id === $sid, 404);
+
+        $activeIssues = BookIssue::where('school_id', $sid)
+            ->where('member_type', Student::class)
+            ->where('member_id', $student->id)
+            ->where('status', 'issued')
+            ->count();
+
+        return response()->json([
+            'cleared'       => $activeIssues === 0,
+            'active_issues' => $activeIssues,
+        ]);
     }
 }

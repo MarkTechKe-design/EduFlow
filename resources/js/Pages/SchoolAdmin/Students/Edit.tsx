@@ -1,246 +1,474 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { ArrowLeft } from 'lucide-react';
+import React, { useState } from 'react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
 import type { PageProps, Student, SchoolClass, Section } from '@/Types';
+import { Button } from '@/Components/ui/button';
+import { toInputDate } from '@/lib/utils';
+import { Input } from '@/Components/ui/input';
+import { Label } from '@/Components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/Components/ui/select';
+import { ArrowLeft, User, GraduationCap, Users, ShieldCheck } from 'lucide-react';
 
 interface Props extends PageProps {
-    student:  Student;
-    classes:  Pick<SchoolClass, 'id' | 'name'>[];
-    sections: (Pick<Section, 'id' | 'name'> & { class_id: number })[];
+    student: Student;
+    classes: SchoolClass[];
+    sections: Section[];
 }
 
-const schema = z.object({
-    first_name:      z.string().min(1, 'First name is required'),
-    last_name:       z.string().optional(),
-    gender:          z.enum(['male', 'female', 'other']),
-    date_of_birth:   z.string().optional(),
-    blood_group:     z.string().optional(),
-    religion:        z.string().optional(),
-    nationality:     z.string().optional(),
-    phone:           z.string().optional(),
-    email:           z.string().email().optional().or(z.literal('')),
-    address:         z.string().optional(),
-    category:        z.enum(['general', 'disabled', 'quota']),
-    status:          z.enum(['active', 'alumni', 'transferred', 'inactive']),
-    admission_date:  z.string().optional(),
-    previous_school: z.string().optional(),
-    roll_no:         z.string().optional(),
-    class_id:        z.coerce.number().int().positive('Select a class'),
-    section_id:      z.coerce.number().int().positive().nullable().optional(),
-    guardian: z.object({
-        name:       z.string().min(1, 'Guardian name is required'),
-        relation:   z.string().min(1, 'Relation is required'),
-        phone:      z.string().optional(),
-        email:      z.string().email().optional().or(z.literal('')),
-        occupation: z.string().optional(),
-        address:    z.string().optional(),
-    }),
-});
-type FormData = z.infer<typeof schema>;
+export default function EditStudent({ auth, student, classes = [], sections = [] }: Props) {
+    const [step, setStep] = useState<1 | 2 | 3>(1);
 
-export default function EditStudent() {
-    const { student, classes, sections } = usePage<Props>().props;
+    const { data, setData, put, processing, errors } = useForm({
+        first_name: student.first_name || '',
+        middle_name: student.middle_name || '',
+        last_name: student.last_name || '',
+        gender: student.gender || 'male',
+        date_of_birth: toInputDate(student.date_of_birth || student.dob),
+        birth_certificate_no: student.birth_certificate_no || '',
+        nationality: student.nationality || 'Kenyan',
+        religion: student.religion || '',
+        blood_group: student.blood_group || '',
+        
+        admission_no: student.admission_no || '',
+        nemis_upi: student.nemis_upi || '',
+        assessment_no: student.assessment_no || '',
+        admission_type: student.admission_type || 'new',
+        admission_date: toInputDate(student.admission_date),
+        class_id: student.class_id ? String(student.class_id) : '',
+        section_id: student.section_id ? String(student.section_id) : '',
+        previous_school: student.previous_school || '',
+        status: student.status || 'active',
+        
+        guardian_name: student.guardian?.name || student.guardian_name || '',
+        guardian_relation: student.guardian?.relation || student.guardian_relation || 'Father',
+        guardian_phone: student.guardian?.phone || student.guardian_phone || '',
+        email: student.email || '',
+        phone: student.phone || '',
+        emergency_contact: student.emergency_contact || '',
+        address: student.address || '',
+    });
 
-    const { register, handleSubmit, setValue, watch, setError, formState: { errors, isSubmitting } } =
-        useForm<FormData>({
-            resolver: zodResolver(schema),
-            defaultValues: {
-                first_name:      student.first_name,
-                last_name:       student.last_name ?? '',
-                gender:          student.gender,
-                date_of_birth:   student.date_of_birth?.slice(0, 10) ?? '',
-                blood_group:     student.blood_group ?? '',
-                religion:        student.religion ?? '',
-                nationality:     student.nationality,
-                phone:           student.phone ?? '',
-                email:           student.email ?? '',
-                address:         student.address ?? '',
-                category:        student.category,
-                status:          student.status,
-                admission_date:  student.admission_date?.slice(0, 10) ?? '',
-                previous_school: student.previous_school ?? '',
-                roll_no:         student.roll_no ?? '',
-                class_id:        student.class_id,
-                section_id:      student.section_id ?? undefined,
-                guardian: {
-                    name:       student.guardian?.name ?? '',
-                    relation:   student.guardian?.relation ?? 'Father',
-                    phone:      student.guardian?.phone ?? '',
-                    email:      student.guardian?.email ?? '',
-                    occupation: student.guardian?.occupation ?? '',
-                    address:    student.guardian?.address ?? '',
-                },
-            },
-        });
+    const filteredSections = sections.filter((s) => String(s.class_id) === String(data.class_id));
+    const fullName = student.full_name || [student.first_name, student.middle_name, student.last_name].filter(Boolean).join(' ');
 
-    const selectedClassId = watch('class_id');
-    const visibleSections = sections.filter((s) => s.class_id === Number(selectedClassId));
-
-    const onSubmit = (data: FormData) => {
-        router.put(`/school/students/${student.id}`, data, {
-            onError: (errs) => Object.entries(errs).forEach(([f, m]) => setError(f as keyof FormData, { message: m })),
-        });
-    };
-
-    const Field = ({ name, label, placeholder, type = 'text', required = false }: {
-        name: string; label: string; placeholder?: string; type?: string; required?: boolean;
-    }) => {
-        const keys = name.split('.');
-        const err  = keys.length === 2
-            ? (errors as Record<string, Record<string, { message?: string }>>)[keys[0]]?.[keys[1]]
-            : (errors as Record<string, { message?: string }>)[name];
-        return (
-            <div className="space-y-1.5">
-                <Label className="text-sm font-medium">{label}{required && <span className="text-red-500 ml-1">*</span>}</Label>
-                <Input type={type} placeholder={placeholder} className="h-9" {...register(name as keyof FormData)} />
-                {err && <p className="text-xs text-red-500">{err.message as string}</p>}
-            </div>
-        );
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        put(`/school/students/${student.id}`);
     };
 
     return (
-        <AppLayout breadcrumbs={[
-            { label: 'Students', href: '/school/students' },
-            { label: student.full_name, href: `/school/students/${student.id}` },
-            { label: 'Edit' },
-        ]}>
-            <Head title={`Edit ${student.full_name}`} />
+        <AppLayout header="Edit Learner Profile">
+            <Head title={`Edit ${fullName} - EduFlow`} />
 
-            <div className="max-w-2xl">
-                <div className="flex items-center gap-3 mb-6">
-                    <Button variant="ghost" size="icon" asChild>
-                        <Link href={`/school/students/${student.id}`}><ArrowLeft className="w-4 h-4" /></Link>
-                    </Button>
+            <div className="max-w-4xl mx-auto space-y-6">
+                {/* Header */}
+                <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-xl font-bold text-slate-900 dark:text-white">Edit Student</h1>
-                        <p className="text-sm text-slate-500">{student.full_name} · {student.admission_no}</p>
+                        <Link
+                            href={`/school/students/${student.id}`}
+                            className="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 mb-1"
+                        >
+                            <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+                            Back to Student Profile
+                        </Link>
+                        <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+                            Edit Profile: {fullName}
+                        </h1>
+                        <p className="text-xs text-slate-500">
+                            Admission No: <span className="font-semibold text-slate-700 dark:text-slate-300 font-mono">{student.admission_no}</span>
+                        </p>
                     </div>
+
+                    <Link href={`/school/students/${student.id}`}>
+                        <Button variant="outline" size="sm" className="h-9 text-xs">
+                            View Profile
+                        </Button>
+                    </Link>
                 </div>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    {/* Personal */}
-                    <Card className="dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-                        <CardHeader className="pb-3"><CardTitle className="text-sm">Personal Information</CardTitle></CardHeader>
-                        <CardContent className="grid grid-cols-2 gap-4">
-                            <Field name="first_name" label="First Name" required />
-                            <Field name="last_name"  label="Last Name" />
-                            <div className="space-y-1.5">
-                                <Label className="text-sm font-medium">Gender</Label>
-                                <Select defaultValue={student.gender} onValueChange={(v) => setValue('gender', v as 'male' | 'female' | 'other')}>
-                                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="male">Male</SelectItem>
-                                        <SelectItem value="female">Female</SelectItem>
-                                        <SelectItem value="other">Other</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <Field name="date_of_birth" label="Date of Birth" type="date" />
-                            <Field name="blood_group" label="Blood Group" />
-                            <Field name="religion"    label="Religion" />
-                            <Field name="phone"       label="Phone" />
-                            <Field name="email"       label="Email" type="email" />
-                            <div className="space-y-1.5">
-                                <Label className="text-sm font-medium">Status</Label>
-                                <Select defaultValue={student.status} onValueChange={(v) => setValue('status', v as FormData['status'])}>
-                                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="active">Active</SelectItem>
-                                        <SelectItem value="alumni">Alumni</SelectItem>
-                                        <SelectItem value="transferred">Transferred</SelectItem>
-                                        <SelectItem value="inactive">Inactive</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-sm font-medium">Category</Label>
-                                <Select defaultValue={student.category} onValueChange={(v) => setValue('category', v as FormData['category'])}>
-                                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="general">General</SelectItem>
-                                        <SelectItem value="disabled">Disabled</SelectItem>
-                                        <SelectItem value="quota">Quota</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="col-span-2 space-y-1.5">
-                                <Label className="text-sm font-medium">Address</Label>
-                                <Textarea rows={2} className="resize-none" {...register('address')} />
-                            </div>
-                        </CardContent>
-                    </Card>
+                {/* Step Indicator Tabs */}
+                <div className="grid grid-cols-3 gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <button
+                        type="button"
+                        onClick={() => setStep(1)}
+                        className={`flex items-center gap-2.5 p-2 rounded-lg text-left transition-all ${
+                            step === 1
+                                ? 'bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
+                                : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                        }`}
+                    >
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === 1 ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-600'}`}>1</div>
+                        <div>
+                            <div className="text-xs font-bold leading-tight">Identity & Civil Registry</div>
+                            <div className="text-[10px] text-slate-400">Name, DOB, Birth Cert</div>
+                        </div>
+                    </button>
 
-                    {/* Class */}
-                    <Card className="dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-                        <CardHeader className="pb-3"><CardTitle className="text-sm">Class Assignment</CardTitle></CardHeader>
-                        <CardContent className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label className="text-sm font-medium">Class <span className="text-red-500">*</span></Label>
-                                <Select defaultValue={String(student.class_id)} onValueChange={(v) => { setValue('class_id', Number(v)); setValue('section_id', null); }}>
-                                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {classes.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                                {errors.class_id && <p className="text-xs text-red-500">{errors.class_id.message}</p>}
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-sm font-medium">Section</Label>
-                                <Select defaultValue={student.section_id ? String(student.section_id) : undefined} onValueChange={(v) => setValue('section_id', Number(v))}>
-                                    <SelectTrigger className="h-9"><SelectValue placeholder="Select section" /></SelectTrigger>
-                                    <SelectContent>
-                                        {visibleSections.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <Field name="roll_no"         label="Roll No" />
-                            <Field name="admission_date"  label="Admission Date" type="date" />
-                        </CardContent>
-                    </Card>
+                    <button
+                        type="button"
+                        onClick={() => setStep(2)}
+                        className={`flex items-center gap-2.5 p-2 rounded-lg text-left transition-all ${
+                            step === 2
+                                ? 'bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
+                                : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                        }`}
+                    >
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === 2 ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-600'}`}>2</div>
+                        <div>
+                            <div className="text-xs font-bold leading-tight">Academic & Identifiers</div>
+                            <div className="text-[10px] text-slate-400">NEMIS UPI, Class, Stream</div>
+                        </div>
+                    </button>
 
-                    {/* Guardian */}
-                    <Card className="dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-                        <CardHeader className="pb-3"><CardTitle className="text-sm">Guardian Information</CardTitle></CardHeader>
-                        <CardContent className="grid grid-cols-2 gap-4">
-                            <Field name="guardian.name"  label="Guardian Name" required />
-                            <div className="space-y-1.5">
-                                <Label className="text-sm font-medium">Relation</Label>
-                                <Select defaultValue={student.guardian?.relation ?? 'Father'} onValueChange={(v) => setValue('guardian.relation', v)}>
-                                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {['Father','Mother','Guardian','Uncle','Aunt','Sibling'].map((r) => (
-                                            <SelectItem key={r} value={r}>{r}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <Field name="guardian.phone"      label="Phone" />
-                            <Field name="guardian.email"      label="Email" type="email" />
-                            <Field name="guardian.occupation" label="Occupation" />
-                            <div className="col-span-2 space-y-1.5">
-                                <Label className="text-sm font-medium">Guardian Address</Label>
-                                <Textarea rows={2} className="resize-none" {...register('guardian.address')} />
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <button
+                        type="button"
+                        onClick={() => setStep(3)}
+                        className={`flex items-center gap-2.5 p-2 rounded-lg text-left transition-all ${
+                            step === 3
+                                ? 'bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
+                                : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                        }`}
+                    >
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === 3 ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-600'}`}>3</div>
+                        <div>
+                            <div className="text-xs font-bold leading-tight">Guardian & Emergency</div>
+                            <div className="text-[10px] text-slate-400">Parent Contacts & Address</div>
+                        </div>
+                    </button>
+                </div>
 
-                    <div className="flex gap-3 justify-end">
-                        <Button type="button" variant="outline" asChild>
-                            <Link href={`/school/students/${student.id}`}>Cancel</Link>
-                        </Button>
-                        <Button type="submit" disabled={isSubmitting} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-                            {isSubmitting ? 'Saving…' : 'Save Changes'}
-                        </Button>
-                    </div>
+                {/* Form Body */}
+                <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-6 shadow-sm">
+                    {/* STEP 1: Personal Identity */}
+                    {step === 1 && (
+                        <div className="space-y-4">
+                            <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Learner Identity & Civil Data</h3>
+                                <p className="text-xs text-slate-500">Official names as documented on the Kenyan Birth Certificate or National Entry document.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <Label className="text-xs">First Name *</Label>
+                                    <Input
+                                        value={data.first_name}
+                                        onChange={(e) => setData('first_name', e.target.value)}
+                                        placeholder="e.g. Faith"
+                                        className="h-9 mt-1 text-xs"
+                                        required
+                                    />
+                                    {errors.first_name && <p className="text-[11px] text-rose-500 mt-1">{errors.first_name}</p>}
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Middle Name</Label>
+                                    <Input
+                                        value={data.middle_name}
+                                        onChange={(e) => setData('middle_name', e.target.value)}
+                                        placeholder="e.g. Akinyi"
+                                        className="h-9 mt-1 text-xs"
+                                    />
+                                    {errors.middle_name && <p className="text-[11px] text-rose-500 mt-1">{errors.middle_name}</p>}
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Last Name / Surname *</Label>
+                                    <Input
+                                        value={data.last_name}
+                                        onChange={(e) => setData('last_name', e.target.value)}
+                                        placeholder="e.g. Otieno"
+                                        className="h-9 mt-1 text-xs"
+                                        required
+                                    />
+                                    {errors.last_name && <p className="text-[11px] text-rose-500 mt-1">{errors.last_name}</p>}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                                <div>
+                                    <Label className="text-xs">Gender *</Label>
+                                    <Select value={data.gender} onValueChange={(val) => setData('gender', val)}>
+                                        <SelectTrigger className="h-9 mt-1 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="male">Male</SelectItem>
+                                            <SelectItem value="female">Female</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Date of Birth</Label>
+                                    <Input
+                                        type="date"
+                                        value={data.date_of_birth}
+                                        onChange={(e) => setData('date_of_birth', e.target.value)}
+                                        className="h-9 mt-1 text-xs"
+                                    />
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Birth Certificate / Entry No</Label>
+                                    <Input
+                                        value={data.birth_certificate_no}
+                                        onChange={(e) => setData('birth_certificate_no', e.target.value)}
+                                        placeholder="e.g. BC-9812039"
+                                        className="h-9 mt-1 text-xs"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                                <div>
+                                    <Label className="text-xs">Nationality</Label>
+                                    <Input
+                                        value={data.nationality}
+                                        onChange={(e) => setData('nationality', e.target.value)}
+                                        placeholder="Kenyan"
+                                        className="h-9 mt-1 text-xs"
+                                    />
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Blood Group</Label>
+                                    <Input
+                                        value={data.blood_group}
+                                        onChange={(e) => setData('blood_group', e.target.value)}
+                                        placeholder="e.g. O+, A+"
+                                        className="h-9 mt-1 text-xs"
+                                    />
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Religious Affiliation</Label>
+                                    <Input
+                                        value={data.religion}
+                                        onChange={(e) => setData('religion', e.target.value)}
+                                        placeholder="e.g. Christian / Muslim"
+                                        className="h-9 mt-1 text-xs"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end pt-4">
+                                <Button type="button" onClick={() => setStep(2)} className="h-9 text-xs">
+                                    Next: Academic & Identifiers
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* STEP 2: Academic Placement & Official Identifiers */}
+                    {step === 2 && (
+                        <div className="space-y-4">
+                            <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Academic Placement & Official Numbers</h3>
+                                <p className="text-xs text-slate-500">Official admission identifier, NEMIS UPI, KNEC CBA code, class, and active stream.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <Label className="text-xs">School Admission No *</Label>
+                                    <Input
+                                        value={data.admission_no}
+                                        onChange={(e) => setData('admission_no', e.target.value)}
+                                        placeholder="e.g. ADM-2026-0332"
+                                        className="h-9 mt-1 text-xs font-mono"
+                                        required
+                                    />
+                                    {errors.admission_no && <p className="text-[11px] text-rose-500 mt-1">{errors.admission_no}</p>}
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">NEMIS UPI (Unique Personal Identifier)</Label>
+                                    <Input
+                                        value={data.nemis_upi}
+                                        onChange={(e) => setData('nemis_upi', e.target.value)}
+                                        placeholder="e.g. ABC123DEF"
+                                        className="h-9 mt-1 text-xs font-mono"
+                                    />
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">KNEC Assessment Number</Label>
+                                    <Input
+                                        value={data.assessment_no}
+                                        onChange={(e) => setData('assessment_no', e.target.value)}
+                                        placeholder="e.g. 20401102001"
+                                        className="h-9 mt-1 text-xs font-mono"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                                <div>
+                                    <Label className="text-xs">Class / Grade *</Label>
+                                    <Select
+                                        value={data.class_id ? String(data.class_id) : ''}
+                                        onValueChange={(val) => {
+                                            setData((prev) => ({ ...prev, class_id: val, section_id: '' }));
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-9 mt-1 text-xs"><SelectValue placeholder="Select Class" /></SelectTrigger>
+                                        <SelectContent>
+                                            {classes.map((c) => (
+                                                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Stream / Section</Label>
+                                    <Select
+                                        value={data.section_id ? String(data.section_id) : ''}
+                                        onValueChange={(val) => setData('section_id', val)}
+                                        disabled={!data.class_id || filteredSections.length === 0}
+                                    >
+                                        <SelectTrigger className="h-9 mt-1 text-xs">
+                                            <SelectValue placeholder={!data.class_id ? 'Select Class first' : (filteredSections.length === 0 ? 'No streams available' : 'Select Stream')} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {filteredSections.map((s) => (
+                                                <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Admission Type</Label>
+                                    <Select value={data.admission_type} onValueChange={(val) => setData('admission_type', val)}>
+                                        <SelectTrigger className="h-9 mt-1 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="new">New Admission</SelectItem>
+                                            <SelectItem value="transfer_in">Transfer In</SelectItem>
+                                            <SelectItem value="returning">Returning Learner</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                                <div>
+                                    <Label className="text-xs">Admission Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={data.admission_date}
+                                        onChange={(e) => setData('admission_date', e.target.value)}
+                                        className="h-9 mt-1 text-xs"
+                                    />
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Enrollment Status</Label>
+                                    <Select value={data.status} onValueChange={(val) => setData('status', val)}>
+                                        <SelectTrigger className="h-9 mt-1 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="active">Active</SelectItem>
+                                            <SelectItem value="inactive">Inactive</SelectItem>
+                                            <SelectItem value="transferred">Transferred Out</SelectItem>
+                                            <SelectItem value="graduated">Graduated</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Previous School Attended</Label>
+                                    <Input
+                                        value={data.previous_school}
+                                        onChange={(e) => setData('previous_school', e.target.value)}
+                                        placeholder="e.g. St. Peter's Junior School"
+                                        className="h-9 mt-1 text-xs"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between pt-4">
+                                <Button type="button" variant="outline" onClick={() => setStep(1)} className="h-9 text-xs">
+                                    Back
+                                </Button>
+                                <Button type="button" onClick={() => setStep(3)} className="h-9 text-xs">
+                                    Next: Guardian & Emergency
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* STEP 3: Guardian & Contact Details */}
+                    {step === 3 && (
+                        <div className="space-y-4">
+                            <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Guardian & Emergency Contacts</h3>
+                                <p className="text-xs text-slate-500">Primary parent/guardian relationship details and residential location.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <Label className="text-xs">Guardian Full Name</Label>
+                                    <Input
+                                        value={data.guardian_name}
+                                        onChange={(e) => setData('guardian_name', e.target.value)}
+                                        placeholder="e.g. Dr. Jane Otieno"
+                                        className="h-9 mt-1 text-xs"
+                                    />
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Relationship</Label>
+                                    <Select value={data.guardian_relation} onValueChange={(val) => setData('guardian_relation', val)}>
+                                        <SelectTrigger className="h-9 mt-1 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Father">Father</SelectItem>
+                                            <SelectItem value="Mother">Mother</SelectItem>
+                                            <SelectItem value="Legal Guardian">Legal Guardian</SelectItem>
+                                            <SelectItem value="Sponsor">Sponsor</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Guardian Phone Number</Label>
+                                    <Input
+                                        value={data.guardian_phone}
+                                        onChange={(e) => setData('guardian_phone', e.target.value)}
+                                        placeholder="+254 7XX XXX XXX"
+                                        className="h-9 mt-1 text-xs"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                                <div>
+                                    <Label className="text-xs">Emergency Phone Contact</Label>
+                                    <Input
+                                        value={data.emergency_contact}
+                                        onChange={(e) => setData('emergency_contact', e.target.value)}
+                                        placeholder="+254 7XX XXX XXX (Alternative Contact)"
+                                        className="h-9 mt-1 text-xs"
+                                    />
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs">Physical / Residential Address</Label>
+                                    <Input
+                                        value={data.address}
+                                        onChange={(e) => setData('address', e.target.value)}
+                                        placeholder="e.g. Kilimani, Nairobi"
+                                        className="h-9 mt-1 text-xs"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between pt-6 border-t border-slate-100 dark:border-slate-800">
+                                <Button type="button" variant="outline" onClick={() => setStep(2)} className="h-9 text-xs">
+                                    Back
+                                </Button>
+                                <Button type="submit" disabled={processing} className="h-9 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6">
+                                    {processing ? 'Saving Changes...' : 'Save & Update Learner Profile'}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </form>
             </div>
         </AppLayout>

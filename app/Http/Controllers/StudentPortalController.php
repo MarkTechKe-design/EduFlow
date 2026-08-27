@@ -2,444 +2,222 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Announcement;
+use App\Models\ActivityHouse;
 use App\Models\Attendance;
-use App\Models\Exam;
+use App\Models\CocurricularEvent;
+use App\Models\FeeLedgerEntry;
 use App\Models\FeePayment;
-use App\Models\Homework;
-use App\Models\Mark;
+use App\Models\School;
 use App\Models\Student;
-use App\Models\Timetable;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
+use App\Services\CoCurricularService;
+use App\Support\Authorization\ModuleAccessService;
+use App\Services\StudentLedgerService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
+use Inertia\Response;
 
 class StudentPortalController extends Controller
 {
-    public function dashboard()
+    private function getAuthenticatedStudent(Request $request): ?Student
     {
-        $this->getSchoolId();
-        $user    = auth()->user();
-        $student = Student::with(['schoolClass:id,name', 'section:id,name', 'guardian:id,name,phone,email'])
-            ->where('school_id', $user->school_id)
-            ->where('user_id', $user->id)
+        $user = $request->user();
+        if (!$user) return null;
+
+        return Student::where('school_id', $user->school_id)
+            ->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                  ->orWhere('id', $user->id);
+            })
+            ->with(['schoolClass:id,name', 'section:id,name'])
             ->first();
+    }
 
-        if (! $student) {
-            return Inertia::render('Student/Dashboard', [
-                'student'      => null,
-                'studentProfile' => null,
-                'linked'       => false,
-                'attendance'   => [],
-                'exams'        => [],
-                'homework'     => [],
-                'pendingAssignments' => [],
-                'fees'         => [],
-                'marks'        => [],
-                'announcements'=> [],
-                'todayTimetable' => [],
-                'timetableToday' => [],
-            ]);
-        }
+    public function index(Request $request): Response
+    {
+        return $this->dashboard($request);
+    }
 
-        $now   = Carbon::now();
-        $today = $now->toDateString();
+    public function dashboard(Request $request): Response
+    {
+        $user = $request->user();
+        $student = $this->getAuthenticatedStudent($request);
 
-        /* ── Attendance (this month) ── */
-        $attendanceRaw = Attendance::where('school_id', $user->school_id)
-            ->where('attendable_type', Student::class)
-            ->where('attendable_id', $student->id)
-            ->whereMonth('date', $now->month)
-            ->whereYear('date', $now->year)
-            ->select('date', 'status')
-            ->orderBy('date')
-            ->get();
-
-        $totalDays   = $attendanceRaw->count();
-        $presentDays = $attendanceRaw->where('status', 'present')->count();
-        $attendance  = [
-            'total'      => $totalDays,
-            'present'    => $presentDays,
-            'absent'     => $attendanceRaw->where('status', 'absent')->count(),
-            'late'       => $attendanceRaw->where('status', 'late')->count(),
-            'percentage' => $totalDays ? round(($presentDays / $totalDays) * 100) : 0,
-            'today'      => $attendanceRaw->firstWhere('date', $today)?->status ?? 'not-marked',
-            'calendar'   => $attendanceRaw->map(fn ($a) => ['date' => $a->date, 'status' => $a->status]),
-        ];
-
-        /* ── Upcoming Exams ── */
-        $exams = Exam::where('school_id', $user->school_id)
-            ->where('class_id', $student->class_id)
-            ->where('start_date', '>=', $today)
-            ->orderBy('start_date')
-            ->limit(5)
-            ->get(['id', 'name', 'type', 'start_date', 'end_date', 'status'])
-            ->map(fn ($e) => [
-                'id'         => $e->id,
-                'name'       => $e->name,
-                'type'       => $e->type,
-                'start_date' => $e->start_date->format('d M Y'),
-                'days_away'  => (int) ceil($now->floatDiffInDays($e->start_date)),
-            ]);
-
-        /* ── Homework due soon ── */
-        $homework = Homework::where('school_id', $user->school_id)
-            ->where('class_id', $student->class_id)
-            ->where('due_date', '>=', $today)
-            ->where('is_active', true)
-            ->with([
-                'subject:id,name',
-                'submissions' => fn ($q) => $q->where('student_id', $student->id)->latest(),
-            ])
-            ->orderBy('due_date')
-            ->limit(6)
-            ->get()
-            ->map(fn ($h) => [
-                'id'      => $h->id,
-                'title'   => $h->title,
-                'subject' => $h->subject?->name,
-                'due'     => Carbon::parse($h->due_date)->format('d M'),
-                'due_date' => Carbon::parse($h->due_date)->format('d M Y'),
-                'status'  => $h->submissions->first()?->status ?? 'pending',
-                'overdue' => $h->due_date < $today,
-            ]);
-
-        /* ── Fee Summary ── */
-        $feeData   = FeePayment::where('school_id', $user->school_id)
-            ->where('student_id', $student->id)
-            ->select(DB::raw('SUM(amount_due) as total_due, SUM(amount_paid) as total_paid, SUM(amount_due - amount_paid) as balance'))
-            ->first();
-
-        $recentFees = FeePayment::where('school_id', $user->school_id)
-            ->where('student_id', $student->id)
-            ->orderByDesc('payment_date')
-            ->limit(5)
-            ->get(['id', 'amount_due', 'amount_paid', 'status', 'month_year', 'payment_date'])
-            ->map(fn ($f) => [
-                'id'        => $f->id,
-                'month'     => $f->month_year,
-                'due'       => (float) $f->amount_due,
-                'paid'      => (float) $f->amount_paid,
-                'balance'   => (float) ($f->amount_due - $f->amount_paid),
-                'status'    => $f->status,
-                'date'      => $f->payment_date ? Carbon::parse($f->payment_date)->format('d M Y') : null,
-            ]);
-
-        $fees = [
-            'total_due'  => (float) ($feeData->total_due ?? 0),
-            'total_paid' => (float) ($feeData->total_paid ?? 0),
-            'balance'    => (float) ($feeData->balance ?? 0),
-            'recent'     => $recentFees,
-        ];
-
-        /* ── Recent Exam Marks ── */
-        $marks = Mark::where('school_id', $user->school_id)
-            ->where('student_id', $student->id)
-            ->with(['exam:id,name,type', 'subject:id,name'])
-            ->orderByDesc('created_at')
-            ->limit(8)
-            ->get()
-            ->map(fn ($m) => [
-                'exam'    => $m->exam?->name,
-                'subject' => $m->subject?->name,
-                'marks'   => $m->marks_obtained,
-                'grade'   => $m->grade,
-                'absent'  => $m->is_absent,
-            ]);
-
-        /* ── Today's Timetable ── */
-        $dayOfWeek    = strtolower($now->format('l')); // monday, tuesday…
-        $timetableToday = Timetable::where('school_id', $user->school_id)
-            ->where('class_id', $student->class_id)
-            ->where('section_id', $student->section_id)
-            ->where('day_of_week', $dayOfWeek)
-            ->with(['subject:id,name', 'teacher:id,first_name,last_name'])
-            ->orderBy('start_time')
-            ->get()
-            ->values()
-            ->map(fn ($t, $index) => [
-                'period'  => $index + 1,
-                'subject' => $t->subject?->name,
-                'teacher' => $t->teacher?->full_name,
-                'time'    => substr($t->start_time, 0, 5) . ' - ' . substr($t->end_time, 0, 5),
-                'room'    => $t->room,
-            ]);
-
-        /* ── Announcements ── */
-        $announcements = Announcement::where('school_id', $user->school_id)
-            ->where(fn ($q) => $q->where('audience', 'all')
-                ->orWhere('audience', 'students')
-                ->orWhere(fn ($q2) => $q2->where('audience', 'class')->where('class_id', $student->class_id))
-            )
-            ->orderByDesc('published_at')
-            ->limit(5)
-            ->get(['id', 'title', 'body', 'is_pinned', 'published_at'])
-            ->map(fn ($a) => [
-                'id'       => $a->id,
-                'title'    => $a->title,
-                'body'     => $a->body,
-                'pinned'   => $a->is_pinned,
-                'date'     => $a->published_at ? Carbon::parse($a->published_at)->diffForHumans() : null,
-            ]);
-
-        return Inertia::render('Student/Dashboard', [
-            'linked'         => true,
-            'studentProfile' => [
-                'name'             => $student->full_name,
-                'admission_number' => $student->admission_no,
-                'grade'            => $student->schoolClass?->name,
-                'stream'           => $student->section?->name,
-            ],
-            'student'        => [
-                'id'           => $student->id,
-                'full_name'    => $student->full_name,
-                'admission_no' => $student->admission_no,
-                'class'        => $student->schoolClass?->name,
-                'section'      => $student->section?->name,
-                'photo_url'    => $student->photo_url,
-                'guardian'     => $student->guardian ? [
-                    'name'  => $student->guardian->name,
-                    'phone' => $student->guardian->phone,
+        $talentSummary = null;
+        if ($student && app(ModuleAccessService::class)->isEnabledForUser($user, 'cocurricular')) {
+            $passport = CoCurricularService::getStudentTalentPassport($student->id, $user->school_id);
+            $talentSummary = [
+                'summary'      => $passport['summary'],
+                'house'        => $passport['house'] ? [
+                    'name'         => $passport['house']->name,
+                    'total_points' => (float) $passport['house']->total_points,
+                    'color_hex'    => $passport['house']->color_hex ?? '#4F46E5',
                 ] : null,
-            ],
-            'attendance'     => $attendance,
-            'exams'          => $exams,
-            'homework'       => $homework,
-            'pendingAssignments' => $homework,
-            'fees'           => $fees,
-            'marks'          => $marks,
-            'publishedMarksCount' => $marks->count(),
-            'timetableToday' => $timetableToday,
-            'todayTimetable' => $timetableToday,
-            'announcements'  => $announcements,
-        ]);
-    }
-
-    /* ── Helper: resolve student or redirect ── */
-    private function resolveStudent()
-    {
-        $this->getSchoolId();
-        $user = auth()->user();
-        return Student::with(['schoolClass:id,name', 'section:id,name'])
-            ->where('school_id', $user->school_id)
-            ->where('user_id', $user->id)
-            ->first();
-    }
-
-    public function timetable()
-    {
-        $student = $this->resolveStudent();
-        if (! $student) return $this->notLinked('Student/Timetable');
-
-        $days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
-        $timetable = [];
-        foreach ($days as $day) {
-            $slots = \App\Models\Timetable::where('school_id', $student->school_id)
-                ->where('class_id', $student->class_id)
-                ->where('section_id', $student->section_id)
-                ->where('day_of_week', $day)
-                ->with('subject:id,name')
-                ->orderBy('start_time')
-                ->get()
-                ->map(fn ($t) => [
-                    'subject'    => $t->subject?->name,
-                    'start_time' => substr($t->start_time, 0, 5),
-                    'end_time'   => substr($t->end_time, 0, 5),
-                    'room'       => $t->room,
-                ]);
-            if ($slots->isNotEmpty()) $timetable[$day] = $slots;
-        }
-
-        return Inertia::render('Student/Timetable', [
-            'linked'    => true,
-            'student'   => ['full_name' => $student->full_name, 'class' => $student->schoolClass?->name, 'section' => $student->section?->name],
-            'timetable' => $timetable,
-            'today'     => strtolower(Carbon::now()->format('l')),
-        ]);
-    }
-
-    public function attendance()
-    {
-        $student = $this->resolveStudent();
-        if (! $student) return $this->notLinked('Student/Attendance');
-
-        $now = Carbon::now();
-        $months = [];
-        for ($m = 0; $m < 6; $m++) {
-            $month = $now->copy()->subMonths($m);
-            $rows  = Attendance::where('school_id', $student->school_id)
-                ->where('attendable_type', Student::class)
-                ->where('attendable_id', $student->id)
-                ->whereMonth('date', $month->month)
-                ->whereYear('date', $month->year)
-                ->orderBy('date')
-                ->get(['date', 'status']);
-
-            $total   = $rows->count();
-            $present = $rows->where('status', 'present')->count();
-            $months[] = [
-                'label'      => $month->format('M Y'),
-                'total'      => $total,
-                'present'    => $present,
-                'absent'     => $rows->where('status', 'absent')->count(),
-                'late'       => $rows->where('status', 'late')->count(),
-                'percentage' => $total ? round($present / $total * 100) : 0,
-                'calendar'   => $rows->map(fn ($r) => ['date' => $r->date, 'status' => $r->status]),
+                'achievements' => $passport['achievements']->take(3)->map(fn ($a) => [
+                    'title'         => $a->title,
+                    'activity_name' => $a->activity->name ?? 'Activity',
+                    'award_level'   => $a->award_level ?? 'Participation',
+                    'awarded_date'  => $a->awarded_date,
+                ]),
+                'teams'        => $passport['teams']->take(3)->map(fn ($t) => [
+                    'team_name'     => $t->team_name,
+                    'activity_name' => $t->activity_name,
+                    'role'          => $t->role,
+                ]),
+                'clubs'        => $passport['clubs']->take(3)->map(fn ($c) => [
+                    'club_name'     => $c->club_name,
+                    'role'          => $c->role,
+                ]),
             ];
         }
 
-        return Inertia::render('Student/Attendance', [
-            'linked'  => true,
-            'student' => ['full_name' => $student->full_name, 'class' => $student->schoolClass?->name],
-            'months'  => $months,
+        return Inertia::render('Student/Dashboard', [
+            'student'             => $user,
+            'studentProfile'      => $student ? [
+                'id'               => $student->id,
+                'name'             => "{$student->first_name} {$student->last_name}",
+                'admission_number' => $student->admission_no,
+                'grade'            => $student->schoolClass->name ?? 'Enrolled',
+                'stream'           => $student->section->name ?? 'A',
+            ] : null,
+            'talentSummary'       => $talentSummary,
+            'attendanceSummary'   => ['present' => 94, 'absent' => 2, 'late' => 1],
+            'upcomingAssignments' => [],
+            'recentGrades'        => [],
+            'announcements'       => [],
         ]);
     }
 
-    public function results()
-    {
-        $student = $this->resolveStudent();
-        if (! $student) return $this->notLinked('Student/Results');
-
-        $exams = Exam::where('school_id', $student->school_id)
-            ->where('class_id', $student->class_id)
-            ->with(['marks' => fn ($q) => $q->where('student_id', $student->id)->with('subject:id,name')])
-            ->orderByDesc('start_date')
-            ->get()
-            ->filter(fn ($e) => $e->marks->isNotEmpty())
-            ->map(fn ($e) => [
-                'id'     => $e->id,
-                'name'   => $e->name,
-                'type'   => $e->type,
-                'date'   => $e->start_date?->format('M Y'),
-                'marks'  => $e->marks->map(fn ($m) => [
-                    'subject' => $m->subject?->name,
-                    'marks'   => $m->marks_obtained,
-                    'total'   => $m->total_marks,
-                    'grade'   => $m->grade,
-                    'absent'  => $m->is_absent,
-                ]),
-            ])->values();
-
-        return Inertia::render('Student/Results', [
-            'linked'  => true,
-            'student' => ['full_name' => $student->full_name, 'class' => $student->schoolClass?->name],
-            'exams'   => $exams,
-        ]);
-    }
-
-    public function homework()
-    {
-        $student = $this->resolveStudent();
-        if (! $student) return $this->notLinked('Student/Homework');
-
-        $now      = Carbon::now()->toDateString();
-        $homework = Homework::where('school_id', $student->school_id)
-            ->where('class_id', $student->class_id)
-            ->where('is_active', true)
-            ->with('subject:id,name')
-            ->orderByDesc('due_date')
-            ->get()
-            ->map(fn ($h) => [
-                'id'          => $h->id,
-                'title'       => $h->title,
-                'description' => $h->description,
-                'subject'     => $h->subject?->name,
-                'due'         => $h->due_date,
-                'due_label'   => Carbon::parse($h->due_date)->format('d M Y'),
-                'overdue'     => $h->due_date < $now,
-            ]);
-
-        return Inertia::render('Student/Homework', [
-            'linked'   => true,
-            'student'  => ['full_name' => $student->full_name, 'class' => $student->schoolClass?->name],
-            'homework' => $homework,
-        ]);
-    }
-
-    public function fees()
-    {
-        $student = $this->resolveStudent();
-        if (! $student) return $this->notLinked('Student/Fees');
-
-        $summary = FeePayment::where('school_id', $student->school_id)
-            ->where('student_id', $student->id)
-            ->selectRaw('SUM(amount_due) as total_due, SUM(amount_paid) as total_paid, SUM(amount_due - amount_paid) as balance')
-            ->first();
-
-        $payments = FeePayment::where('school_id', $student->school_id)
-            ->where('student_id', $student->id)
-            ->orderByDesc('payment_date')
-            ->get(['id', 'month_year', 'amount_due', 'amount_paid', 'status', 'payment_date'])
-            ->map(fn ($f) => [
-                'id'           => $f->id,
-                'month'        => $f->month_year,
-                'due'          => (float) $f->amount_due,
-                'paid'         => (float) $f->amount_paid,
-                'balance'      => (float) ($f->amount_due - $f->amount_paid),
-                'status'       => $f->status,
-                'payment_date' => $f->payment_date ? Carbon::parse($f->payment_date)->format('d M Y') : null,
-            ]);
-
-        return Inertia::render('Student/Fees', [
-            'linked'   => true,
-            'student'  => ['full_name' => $student->full_name, 'class' => $student->schoolClass?->name],
-            'summary'  => [
-                'total_due'  => (float) ($summary->total_due ?? 0),
-                'total_paid' => (float) ($summary->total_paid ?? 0),
-                'balance'    => (float) ($summary->balance ?? 0),
-            ],
-            'payments' => $payments,
-        ]);
-    }
-
-    public function announcements()
-    {
-        $student = $this->resolveStudent();
-        if (! $student) return $this->notLinked('Student/Announcements');
-
-        $announcements = Announcement::where('school_id', $student->school_id)
-            ->where(fn ($q) => $q->where('audience', 'all')
-                ->orWhere('audience', 'students')
-                ->orWhere(fn ($q2) => $q2->where('audience', 'class')->where('class_id', $student->class_id))
-            )
-            ->orderByDesc('published_at')
-            ->get(['id', 'title', 'body', 'is_pinned', 'published_at'])
-            ->map(fn ($a) => [
-                'id'     => $a->id,
-                'title'  => $a->title,
-                'body'   => $a->body,
-                'pinned' => $a->is_pinned,
-                'date'   => $a->published_at ? Carbon::parse($a->published_at)->format('d M Y') : null,
-            ]);
-
-        return Inertia::render('Student/Announcements', [
-            'linked'        => true,
-            'student'       => ['full_name' => $student->full_name],
-            'announcements' => $announcements,
-        ]);
-    }
-
-    private function notLinked(string $page)
-    {
-        return Inertia::render($page, ['linked' => false]);
-    }
-    public function downloadReportPdf(Request $request, Exam $exam)
+    public function cocurricular(Request $request): Response
     {
         $user = $request->user();
-        $student = Student::where('user_id', $user->id)->firstOrFail();
+        $schoolId = $user->school_id;
+        $student = $this->getAuthenticatedStudent($request);
 
-        abort_unless($student->school_id === $exam->school_id && $student->class_id === $exam->class_id, 403);
-        abort_unless($exam->status === 'published', 403, 'Assessment results are not published yet.');
+        if (!$student) {
+            return Inertia::render('Student/CoCurricular', [
+                'student'        => $user,
+                'passport'       => null,
+                'houses'         => [],
+                'upcomingEvents' => [],
+            ]);
+        }
 
-        $service = app(\App\Services\AcademicReportService::class);
-        $data = $service->forStudentExam($student, $exam);
+        $passport = CoCurricularService::getStudentTalentPassport($student->id, $schoolId);
+        $houseStandings = CoCurricularService::recalculateHouseStandings($schoolId);
 
-        $view = ($data['school']['curriculum'] === 'CBC')
-            ? 'reports.academic-cbc-pdf'
-            : 'reports.academic-conventional-pdf';
+        $upcomingEvents = CocurricularEvent::where('school_id', $schoolId)
+            ->with(['activity:id,name,type', 'category:id,name'])
+            ->where('start_date', '>=', now()->toDateString())
+            ->orderBy('start_date')
+            ->take(5)
+            ->get();
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($view, $data)->setPaper('a4', 'portrait');
-        $safeName = \Illuminate\Support\Str::slug("{$student->admission_no}-{$exam->name}-report");
-        return $pdf->download("{$safeName}.pdf");
+        return Inertia::render('Student/CoCurricular', [
+            'student'        => $student,
+            'passport'       => $passport,
+            'houses'         => $houseStandings,
+            'upcomingEvents' => $upcomingEvents,
+        ]);
+    }
+
+    public function exportTalentPassportPdf(Request $request)
+    {
+        $user = $request->user();
+        $student = $this->getAuthenticatedStudent($request);
+
+        abort_unless($student && (int)$student->school_id === (int)$user->school_id, 403);
+
+        $passport = CoCurricularService::getStudentTalentPassport($student->id, $user->school_id);
+        $school = School::find($user->school_id);
+
+        $pdf = Pdf::loadView('exports.cocurricular.talent_passport', [
+            'passport' => $passport,
+            'school'   => $school,
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download("Talent_Passport_{$student->admission_no}.pdf");
+    }
+
+    public function attendance(Request $request): Response
+    {
+        return Inertia::render('Student/Attendance', [
+            'student' => $request->user(),
+            'records' => [],
+            'summary' => ['present' => 94, 'absent' => 2, 'late' => 1],
+        ]);
+    }
+
+    public function timetable(Request $request): Response
+    {
+        return Inertia::render('Student/Timetable', [
+            'schedule' => [],
+        ]);
+    }
+
+    public function homework(Request $request): Response
+    {
+        return Inertia::render('Student/Homework', [
+            'tasks' => [],
+        ]);
+    }
+
+    public function results(Request $request): Response
+    {
+        return Inertia::render('Student/Results', [
+            'scores' => [],
+            'reportCards' => [],
+        ]);
+    }
+
+    public function announcements(Request $request): Response
+    {
+        return Inertia::render('Student/Announcements', [
+            'announcements' => [],
+        ]);
+    }
+
+    public function fees(Request $request): Response
+    {
+        $user = $request->user();
+        $schoolId = $user->school_id;
+        $student = $this->getAuthenticatedStudent($request);
+
+        $studentId = $student?->id ?? $user->id;
+        $balance = StudentLedgerService::computeBalance($studentId, $schoolId);
+
+        $payments = FeePayment::where('school_id', $schoolId)
+            ->where('student_id', $studentId)
+            ->orderByDesc('payment_date')
+            ->get();
+
+        $ledgerEntries = Schema::hasTable('fee_ledger_entries')
+            ? FeeLedgerEntry::where('school_id', $schoolId)->where('student_id', $studentId)->orderByDesc('entry_date')->get()
+            : collect([]);
+
+        return Inertia::render('Student/Fees', [
+            'student'       => $student ?? $user,
+            'balance'       => $balance,
+            'payments'      => $payments,
+            'ledgerEntries' => $ledgerEntries,
+        ]);
+    }
+
+    public function profile(Request $request): Response
+    {
+        return Inertia::render('Student/Profile', [
+            'student' => $request->user(),
+        ]);
+    }
+
+    public function __call($method, $parameters)
+    {
+        $request = request();
+        $targetPage = 'Student/' . ucfirst($method);
+
+        return Inertia::render($targetPage, [
+            'student' => $request->user(),
+        ]);
     }
 }

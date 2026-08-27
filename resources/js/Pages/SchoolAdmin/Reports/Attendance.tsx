@@ -1,162 +1,267 @@
-import DOMPurify from 'dompurify';
-import AppLayout from '@/Layouts/AppLayout';
-import { router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { usePage, router } from '@inertiajs/react';
+import AppLayout from '@/Layouts/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Download, Filter } from 'lucide-react';
+import {
+    CalendarCheck, Filter, Download, UserCheck, UserX, Clock, ShieldCheck, Search
+} from 'lucide-react';
+import type { PageProps } from '@/types';
 
-interface SchoolClass { id: number; name: string; }
-interface Record {
-    id: number; date: string; status: string; remarks?: string;
-    name: string; admission_no: string | null;
-    class: string | null; attendable_type: string;
+interface SchoolClass {
+    id: number;
+    name: string;
 }
-interface Paginated { data: Record[]; total: number; last_page: number; links: { url: string | null; label: string; active: boolean }[]; }
-interface Props {
-    records: Paginated;
-    summary: Record<string, number>;
+
+interface AttendanceRecord {
+    id: number;
+    date: string;
+    status: 'present' | 'absent' | 'late' | 'excused';
+    remarks?: string;
+    name: string;
+    identifier: string;
+    class_name: string;
+    attendable_type: string;
+}
+
+interface PaginatedRecords {
+    data: AttendanceRecord[];
+    total: number;
+    current_page: number;
+    last_page: number;
+    from: number;
+    to: number;
+    links: { url: string | null; label: string; active: boolean }[];
+}
+
+interface Props extends PageProps {
+    records: PaginatedRecords;
+    stats: {
+        total_logs: number;
+        present_count: number;
+        absent_count: number;
+        late_count: number;
+        excused_count: number;
+        attendance_rate: number;
+    };
     classes: SchoolClass[];
-    filters: { class_id?: string; from_date?: string; to_date?: string; status?: string };
+    filters: {
+        from_date: string;
+        to_date: string;
+        status: string;
+        type: string;
+        class_id: string;
+        search: string;
+    };
 }
 
-const statusColor: Record<string, 'default' | 'secondary' | 'destructive'> = {
-    present: 'default', absent: 'destructive', late: 'secondary', excused: 'secondary',
-};
-
-export default function AttendanceReport({ records, summary, classes, filters }: Props) {
-    const [classId, setClassId]   = useState(filters.class_id ?? '');
-    const [fromDate, setFromDate] = useState(filters.from_date ?? '');
-    const [toDate, setToDate]     = useState(filters.to_date ?? '');
-    const [status, setStatus]     = useState(filters.status ?? '');
+export default function AttendanceReport({
+    records = { data: [], total: 0, current_page: 1, last_page: 1, from: 0, to: 0, links: [] },
+    stats = { total_logs: 0, present_count: 0, absent_count: 0, late_count: 0, excused_count: 0, attendance_rate: 100 },
+    classes = [],
+    filters = { from_date: '', to_date: '', status: 'all', type: 'student', class_id: 'all', search: '' },
+}: Props) {
+    const [type, setType] = useState(filters.type || 'student');
+    const [classId, setClassId] = useState(filters.class_id || 'all');
+    const [status, setStatus] = useState(filters.status || 'all');
+    const [fromDate, setFromDate] = useState(filters.from_date || '');
+    const [toDate, setToDate] = useState(filters.to_date || '');
+    const [search, setSearch] = useState(filters.search || '');
 
     function applyFilter() {
-        router.get('/school/reports/attendance', {
-            class_id: classId || undefined, from_date: fromDate || undefined,
-            to_date: toDate || undefined, status: status || undefined,
-        }, { preserveState: true });
-    }
-    function exportPdf() {
-        const q = new URLSearchParams({ class_id: classId, from_date: fromDate, to_date: toDate }).toString();
-        window.open('/school/reports/attendance/export-pdf?' + q, "_blank", "noopener,noreferrer");
+        router.get(
+            '/school/reports/attendance',
+            {
+                type,
+                class_id: classId !== 'all' ? classId : undefined,
+                status: status !== 'all' ? status : undefined,
+                from_date: fromDate || undefined,
+                to_date: toDate || undefined,
+                search: search || undefined,
+            },
+            { preserveState: true }
+        );
     }
 
-    const total = Object.values(summary).reduce((a, b) => a + b, 0);
+    function resetFilter() {
+        router.get('/school/reports/attendance', {}, { preserveState: false });
+    }
+
+    function printReport() {
+        window.print();
+    }
+
+    function getStatusBadge(st: string) {
+        switch (st) {
+            case 'present':
+                return <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-200 font-bold">Present</Badge>;
+            case 'absent':
+                return <Badge variant="outline" className="bg-red-50 text-red-800 border-red-200 font-bold">Absent</Badge>;
+            case 'late':
+                return <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 font-bold">Late Arrival</Badge>;
+            case 'excused':
+                return <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200 font-bold">Excused / Medical</Badge>;
+            default:
+                return <Badge variant="outline" className="bg-slate-100 text-slate-700 capitalize font-bold">{st}</Badge>;
+        }
+    }
 
     return (
-        <AppLayout title="Attendance Report">
-            <div className="space-y-6">
-                <div className="flex items-center justify-between">
+        <AppLayout title="Attendance & Roll Call Analytics Report">
+            <div className="space-y-6 max-w-7xl mx-auto pb-16">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Attendance Report</h1>
-                        <p className="text-sm text-slate-500 mt-0.5">Daily and period-wise attendance records</p>
+                        <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                            <CalendarCheck className="w-5 h-5 text-indigo-600" />
+                            <span>Attendance & Roll Call Analytics</span>
+                        </h1>
+                        <p className="text-xs text-slate-500 mt-1">
+                            Comprehensive daily attendance audit, termly class presence rates, and absentee tracking ledger.
+                        </p>
                     </div>
-                    <Button variant="outline" onClick={exportPdf} className="gap-2">
-                        <Download className="w-4 h-4" /> Export PDF
-                    </Button>
+
+                    <div className="flex items-center gap-2">
+                        <Button onClick={printReport} variant="outline" className="h-9 px-3 text-xs font-bold rounded-xl border-slate-200 shadow-2xs gap-1.5">
+                            <Download className="w-3.5 h-3.5" /> Print / Export
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Metrics Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Presence Rate</span>
+                        <p className="text-2xl font-bold text-emerald-600 mt-1">{stats?.attendance_rate ?? 100}%</p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Present</span>
+                        <p className="text-2xl font-bold text-slate-900 mt-1">{stats?.present_count ?? 0}</p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Absent</span>
+                        <p className="text-2xl font-bold text-red-600 mt-1">{stats?.absent_count ?? 0}</p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Late Arrivals</span>
+                        <p className="text-2xl font-bold text-amber-600 mt-1">{stats?.late_count ?? 0}</p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Excused Absence</span>
+                        <p className="text-2xl font-bold text-blue-600 mt-1">{stats?.excused_count ?? 0}</p>
+                    </div>
                 </div>
 
                 {/* Filters */}
-                <Card>
-                    <CardContent className="pt-4 pb-4">
-                        <div className="flex flex-wrap gap-3 items-end">
-                            <div className="w-44">
-                                <Label className="text-xs mb-1 block">Class</Label>
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 items-end">
+                        <div>
+                            <Label className="text-xs font-bold mb-1 block">Scope / Type</Label>
+                            <Select value={type} onValueChange={setType}>
+                                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="student">Student Roll Call</SelectItem>
+                                    <SelectItem value="staff">Staff Attendance</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {type === 'student' && (
+                            <div>
+                                <Label className="text-xs font-bold mb-1 block">Class / Grade</Label>
                                 <Select value={classId} onValueChange={setClassId}>
-                                    <SelectTrigger><SelectValue placeholder="All classes" /></SelectTrigger>
+                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="All Classes" /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All</SelectItem>
+                                        <SelectItem value="all">All Classes</SelectItem>
                                         {classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="w-36">
-                                <Label className="text-xs mb-1 block">From</Label>
-                                <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
-                            </div>
-                            <div className="w-36">
-                                <Label className="text-xs mb-1 block">To</Label>
-                                <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} />
-                            </div>
-                            <div className="w-36">
-                                <Label className="text-xs mb-1 block">Status</Label>
-                                <Select value={status} onValueChange={setStatus}>
-                                    <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All</SelectItem>
-                                        <SelectItem value="present">Present</SelectItem>
-                                        <SelectItem value="absent">Absent</SelectItem>
-                                        <SelectItem value="late">Late</SelectItem>
-                                        <SelectItem value="excused">Excused</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <Button onClick={applyFilter} className="gap-2"><Filter className="w-4 h-4" /> Filter</Button>
+                        )}
+
+                        <div>
+                            <Label className="text-xs font-bold mb-1 block">Status</Label>
+                            <Select value={status} onValueChange={setStatus}>
+                                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Statuses</SelectItem>
+                                    <SelectItem value="present">Present</SelectItem>
+                                    <SelectItem value="absent">Absent</SelectItem>
+                                    <SelectItem value="late">Late Arrival</SelectItem>
+                                    <SelectItem value="excused">Excused</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
-                    </CardContent>
-                </Card>
 
-                {/* Summary Cards */}
-                {total > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {(['present', 'absent', 'late', 'excused'] as const).map(s => (
-                            <Card key={s}>
-                                <CardContent className="pt-4 pb-4 text-center">
-                                    <p className="text-xs text-slate-500 capitalize">{s}</p>
-                                    <p className="text-2xl font-bold mt-1">{summary[s] ?? 0}</p>
-                                    <p className="text-xs text-slate-400">{total ? ((summary[s] ?? 0) / total * 100).toFixed(1) : 0}%</p>
-                                </CardContent>
-                            </Card>
-                        ))}
+                        <div>
+                            <Label className="text-xs font-bold mb-1 block">From Date</Label>
+                            <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-9 text-xs font-mono" />
+                        </div>
+
+                        <div>
+                            <Label className="text-xs font-bold mb-1 block">To Date</Label>
+                            <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-9 text-xs font-mono" />
+                        </div>
+
+                        <div className="flex gap-2">
+                            <Button onClick={applyFilter} className="h-9 px-4 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-2xs gap-1 flex-1">
+                                <Filter className="w-3.5 h-3.5" /> Filter
+                            </Button>
+                            <Button onClick={resetFilter} variant="outline" className="h-9 px-3 text-xs font-bold rounded-xl border-slate-200">
+                                Reset
+                            </Button>
+                        </div>
                     </div>
-                )}
+                </div>
 
-                {/* Table */}
-                <Card>
-                    <CardHeader><CardTitle>Records ({records.total})</CardTitle></CardHeader>
-                    <CardContent className="p-0">
-                        <Table>
-                            <TableHeader>
+                {/* Records Table */}
+                <div className="rounded-2xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="bg-slate-50">
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4">Date</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4">{type === 'student' ? 'Student Name & Adm' : 'Staff Name & Staff ID'}</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4">{type === 'student' ? 'Class / Grade' : 'Department'}</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4">Attendance Status</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4">Remarks / Explanation</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody className="font-medium text-xs divide-y divide-slate-100">
+                            {(!records?.data || records.data.length === 0) ? (
                                 <TableRow>
-                                    <TableHead>Student</TableHead>
-                                    <TableHead>Admission No</TableHead>
-                                    <TableHead>Class</TableHead>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Status</TableHead>
+                                    <TableCell colSpan={5} className="text-center py-16 text-slate-400">
+                                        No attendance log records found for the selected period and criteria.
+                                    </TableCell>
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {records.data.length === 0 && (
-                                    <TableRow><TableCell colSpan={5} className="text-center text-slate-400 py-8">No records found</TableCell></TableRow>
-                                )}
-                                {records.data.map(r => (
-                                    <TableRow key={r.id}>
-                                        <TableCell>{r.name}</TableCell>
-                                        <TableCell>{r.admission_no ?? 'Ã¢â‚¬—'}</TableCell>
-                                        <TableCell>{r.class ?? 'Ã¢â‚¬—'}</TableCell>
-                                        <TableCell>{new Date(r.date).toLocaleDateString()}</TableCell>
-                                        <TableCell><Badge variant={statusColor[r.status] ?? 'secondary'}>{r.status}</Badge></TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-
-                {records.last_page > 1 && (
-                    <div className="flex justify-center gap-1">
-                        {records.links.map((link, i) => (
-                            <Button key={i} size="sm" variant={link.active ? 'default' : 'outline'} disabled={!link.url}
-                                onClick={() => link.url && router.visit(link.url)}
-                                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(link.label ) }} />
-                        ))}
-                    </div>
-                )}
+                            ) : records.data.map(rec => (
+                                <TableRow key={rec.id} className="hover:bg-slate-50/50">
+                                    <TableCell className="py-3.5 px-4 font-mono text-slate-700">
+                                        {rec.date}
+                                    </TableCell>
+                                    <TableCell className="py-3.5 px-4">
+                                        <p className="font-bold text-slate-900">{rec.name}</p>
+                                        <p className="text-[10px] font-mono text-slate-400">ID: {rec.identifier}</p>
+                                    </TableCell>
+                                    <TableCell className="py-3.5 px-4 font-semibold text-slate-700">
+                                        {rec.class_name}
+                                    </TableCell>
+                                    <TableCell className="py-3.5 px-4">
+                                        {getStatusBadge(rec.status)}
+                                    </TableCell>
+                                    <TableCell className="py-3.5 px-4 text-slate-600">
+                                        {rec.remarks || '—'}
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
             </div>
         </AppLayout>
     );

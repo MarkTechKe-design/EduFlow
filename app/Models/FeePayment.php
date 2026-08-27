@@ -6,6 +6,7 @@ use App\Traits\BelongsToSchool;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FeePayment extends Model
 {
@@ -22,7 +23,7 @@ class FeePayment extends Model
         'amount_paid'  => 'decimal:2',
         'discount'     => 'decimal:2',
         'fine'         => 'decimal:2',
-        'payment_date' => 'date',
+        'payment_date' => 'date:Y-m-d',
     ];
 
     protected static function booted(): void
@@ -45,6 +46,11 @@ class FeePayment extends Model
     public function feeStructure(): BelongsTo
     {
         return $this->belongsTo(FeeStructure::class);
+    }
+
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(FeePaymentAllocation::class);
     }
 
     public function getBalanceAttribute(): float

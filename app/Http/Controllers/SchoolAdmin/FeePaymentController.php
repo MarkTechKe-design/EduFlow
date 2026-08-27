@@ -3,224 +3,235 @@
 namespace App\Http\Controllers\SchoolAdmin;
 
 use App\Http\Controllers\Controller;
-use App\Models\FeeCategory;
+use App\Jobs\SendPaymentReceiptNotification;
+use App\Models\FeeLedgerEntry;
 use App\Models\FeePayment;
 use App\Models\FeeStructure;
+use App\Models\FeeVoteHead;
+use App\Models\School;
 use App\Models\SchoolClass;
 use App\Models\Student;
+use App\Services\StudentLedgerService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
+use Inertia\Response;
 
 class FeePaymentController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request): Response
     {
-        $this->authorize('viewAny', FeePayment::class);
+        $schoolId = auth()->user()->school_id;
 
-        $sid = $this->getSchoolId();
+        $query = FeePayment::where('school_id', $schoolId);
 
-        if ($request->filled('student_id')) {
-            $this->findTenantStudent((int) $request->input('student_id'), $sid);
+        if (Schema::hasTable('fee_payment_allocations')) {
+            $query->with(['student.schoolClass', 'allocations.voteHead']);
+        } else {
+            $query->with(['student.schoolClass']);
         }
 
-        if ($request->filled('class_id')) {
-            $this->findTenantClass((int) $request->input('class_id'), $sid);
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('receipt_no', 'like', "%{$search}%")
+                  ->orWhere('note', 'like', "%{$search}%")
+                  ->orWhereHas('student', function ($sq) use ($search) {
+                      $sq->where('first_name', 'like', "%{$search}%")
+                         ->orWhere('last_name', 'like', "%{$search}%")
+                         ->orWhere('admission_no', 'like', "%{$search}%");
+                  });
+            });
         }
 
-        $payments = FeePayment::with([
-            'student:id,first_name,last_name,admission_no,class_id',
-            'student.schoolClass:id,name',
-            'feeStructure:id,fee_category_id,academic_year,frequency',
-            'feeStructure.feeCategory:id,name,type',
-        ])
-            ->when($request->student_id,  fn ($q) => $q->where('student_id', $request->student_id))
-            ->when($request->status,      fn ($q) => $q->where('status', $request->status))
-            ->when($request->class_id,    fn ($q) => $q->whereHas('student', fn ($sq) => $sq->where('class_id', $request->class_id)))
-            ->when($request->month_year,  fn ($q) => $q->where('month_year', $request->month_year))
-            ->latest()
-            ->paginate(25)
+        if ($request->filled('method') && $request->method !== 'all') {
+            $query->where('method', $request->method);
+        }
+
+        $payments = $query->orderByDesc('payment_date')
+            ->orderByDesc('id')
+            ->paginate(20)
             ->withQueryString();
 
+        $stats = [
+            'total_collections' => (float) FeePayment::where('school_id', $schoolId)->sum('amount_paid'),
+            'mpesa_collections' => (float) FeePayment::where('school_id', $schoolId)->where('method', 'mpesa')->sum('amount_paid'),
+            'bank_collections'  => (float) FeePayment::where('school_id', $schoolId)->whereIn('method', ['bank_transfer', 'cheque', 'direct_deposit'])->sum('amount_paid'),
+            'cash_collections'  => (float) FeePayment::where('school_id', $schoolId)->where('method', 'cash')->sum('amount_paid'),
+        ];
+
         return Inertia::render('SchoolAdmin/Fees/Payments', [
-            'payments'  => $payments,
-            'classes'   => SchoolClass::where('school_id', $sid)->orderBy('numeric_name')->get(['id', 'name']),
-            'filters'   => $request->only('student_id', 'status', 'class_id', 'month_year'),
-            'stats'     => $this->getStats($sid),
+            'payments' => $payments,
+            'stats'    => $stats,
+            'filters'  => [
+                'search' => $request->input('search', ''),
+                'method' => $request->input('method', 'all'),
+            ],
         ]);
     }
 
-    public function create(Request $request)
+    public function outstanding(Request $request): Response
     {
-        $this->authorize('create', FeePayment::class);
+        $schoolId = auth()->user()->school_id;
+        $classes = SchoolClass::where('school_id', $schoolId)->orderBy('numeric_name')->get(['id', 'name']);
 
-        $sid = $this->getSchoolId();
+        $query = Student::where('school_id', $schoolId)
+            ->where('status', 'active')
+            ->with(['schoolClass:id,name', 'section:id,name']);
+
+        if ($request->filled('class_id') && $request->class_id !== 'all') {
+            $query->where('class_id', $request->class_id);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('first_name', 'like', "%{$search}%")
+                  ->orWhere('last_name', 'like', "%{$search}%")
+                  ->orWhere('admission_no', 'like', "%{$search}%");
+            });
+        }
+
+        $students = $query->paginate(20)->withQueryString();
+
+        $students->getCollection()->transform(function ($student) use ($schoolId) {
+            $student->balance = StudentLedgerService::computeBalance($student->id, $schoolId);
+            return $student;
+        });
+
+        $totalOutstanding = 0;
+        if (Schema::hasTable('fee_ledger_entries')) {
+            $totalOutstanding = FeeLedgerEntry::where('school_id', $schoolId)
+                ->selectRaw('COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0) as balance')
+                ->value('balance') ?? 0;
+        } else {
+            $due = (float) FeePayment::withoutGlobalScopes()->where('school_id', $schoolId)->sum('amount_due');
+            $paid = (float) FeePayment::withoutGlobalScopes()->where('school_id', $schoolId)->sum('amount_paid');
+            $totalOutstanding = max(0, $due - $paid);
+        }
+
+        return Inertia::render('SchoolAdmin/Fees/Outstanding', [
+            'students'         => $students,
+            'classes'          => $classes,
+            'totalOutstanding' => (float) max(0, (float) $totalOutstanding),
+            'filters'          => [
+                'search'   => $request->input('search', ''),
+                'class_id' => $request->input('class_id', 'all'),
+            ],
+        ]);
+    }
+
+    public function create(Request $request): Response
+    {
+        $schoolId = auth()->user()->school_id;
+        $classes = SchoolClass::where('school_id', $schoolId)->orderBy('numeric_name')->get(['id', 'name']);
+        $structures = FeeStructure::where('school_id', $schoolId)->with('schoolClass:id,name')->get();
+        $voteHeads = Schema::hasTable('fee_vote_heads')
+            ? FeeVoteHead::where('school_id', $schoolId)->where('is_active', true)->get()
+            : collect();
 
         $student = null;
-        $structures = collect();
-
-        if ($request->student_id) {
-            $student = $this->findTenantStudent((int) $request->student_id, $sid)
-                ->load('schoolClass:id,name');
-            $structures = FeeStructure::with('feeCategory:id,name,type')
-                ->withoutGlobalScopes()
-                ->where('school_id', $sid)
-                ->where('class_id', $student->class_id)
-                ->where('is_active', true)
-                ->get();
+        if ($request->filled('student_id')) {
+            $student = Student::where('school_id', $schoolId)
+                ->with('schoolClass:id,name')
+                ->where(function ($q) use ($request) {
+                    $q->where('id', $request->student_id)
+                      ->orWhere('admission_no', $request->student_id);
+                })
+                ->first();
         }
 
         return Inertia::render('SchoolAdmin/Fees/Collect', [
             'student'    => $student,
             'structures' => $structures,
-            'classes'    => SchoolClass::where('school_id', $sid)->orderBy('numeric_name')->get(['id', 'name']),
+            'classes'    => $classes,
+            'voteHeads'  => $voteHeads,
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
-        $this->authorize('collect', FeePayment::class);
+        $schoolId = auth()->user()->school_id;
 
-        $data = $request->validate([
+        $validated = $request->validate([
             'student_id'       => 'required|integer',
-            'fee_structure_id' => 'required|integer',
-            'amount_due'       => 'required|numeric|min:0',
-            'amount_paid'      => 'required|numeric|min:0',
+            'fee_structure_id' => 'nullable|integer',
+            'amount_paid'      => 'nullable|numeric|min:0',
+            'amount'           => 'nullable|numeric|min:0',
+            'amount_due'       => 'nullable|numeric|min:0',
             'discount'         => 'nullable|numeric|min:0',
             'fine'             => 'nullable|numeric|min:0',
+            'method'           => 'required|in:mpesa,bank_transfer,cash,cheque,direct_deposit',
+            'reference_no'     => 'nullable|string|max:80',
             'payment_date'     => 'required|date',
-            'month_year'       => 'nullable|string|max:10',
-            'method'           => 'required|in:cash,card,online,mpesa,airtel_money,bank_transfer,cheque',
+            'month_year'       => 'nullable|string|max:20',
             'note'             => 'nullable|string|max:500',
         ]);
 
-        $sid = $this->getSchoolId();
+        $student = Student::where('school_id', $schoolId)->findOrFail($validated['student_id']);
 
-        $this->findTenantStudent((int) $data['student_id'], $sid);
-        $this->findTenantFeeStructure((int) $data['fee_structure_id'], $sid);
-
-        $amountDue    = (float) $data['amount_due'];
-        $amountPaid   = (float) $data['amount_paid'];
-        $discount     = (float) ($data['discount'] ?? 0);
-        $fine         = (float) ($data['fine'] ?? 0);
-        $netDue       = $amountDue + $fine - $discount;
-        $balance      = $netDue - $amountPaid;
-
-        $status = match (true) {
-            $balance <= 0          => 'paid',
-            $amountPaid > 0        => 'partial',
-            default                => 'pending',
-        };
-
-        FeePayment::create(array_merge($data, [
-            'school_id' => $sid,
-            'discount'  => $discount,
-            'fine'      => $fine,
-            'status'    => $status,
-        ]));
-
-        return redirect('/school/fees/payments')->with('success', 'Payment recorded successfully.');
-    }
-
-    public function show(FeePayment $feePayment)
-    {
-        $this->authorize('view', $feePayment);
-
-        $feePayment->load([
-            'student:id,first_name,last_name,admission_no,class_id',
-            'student.schoolClass:id,name',
-            'feeStructure.feeCategory:id,name,type',
-        ]);
-
-        return Inertia::render('SchoolAdmin/Fees/Receipt', [
-            'payment' => $feePayment,
-        ]);
-    }
-
-    public function outstanding(Request $request)
-    {
-        $this->authorize('outstanding', FeePayment::class);
-
-        $sid = $this->getSchoolId();
-
-        if ($request->filled('class_id')) {
-            $this->findTenantClass((int) $request->input('class_id'), $sid);
+        $feeStructure = null;
+        if (!empty($validated['fee_structure_id'])) {
+            $feeStructure = FeeStructure::where('school_id', $schoolId)->find($validated['fee_structure_id']);
         }
 
-        // Students with pending/overdue/partial fees
-        $query = FeePayment::with([
-            'student:id,first_name,last_name,admission_no,class_id',
-            'student.schoolClass:id,name',
-            'feeStructure:id,fee_category_id,academic_year',
-            'feeStructure.feeCategory:id,name',
-        ])
-            ->whereIn('status', ['pending', 'partial', 'overdue'])
-            ->when($request->class_id, fn ($q) => $q->whereHas('student', fn ($sq) => $sq->where('class_id', $request->class_id)))
-            ->orderBy('payment_date');
+        $amountPaid = (float) ($validated['amount_paid'] ?? $validated['amount'] ?? 0);
+        $amountDue = (float) ($validated['amount_due'] ?? ($feeStructure ? $feeStructure->amount : $amountPaid));
+        $discount = (float) ($validated['discount'] ?? 0);
+        $fine = (float) ($validated['fine'] ?? 0);
 
-        $outstandingPayments = $query->get();
+        $status = 'paid';
+        if ($amountPaid <= 0) {
+            $status = 'unpaid';
+        } elseif ($amountPaid < ($amountDue + $fine - $discount)) {
+            $status = 'partial';
+        }
 
-        // Group by student
-        $byStudent = $outstandingPayments->groupBy('student_id')->map(function ($payments) {
-            $student = $payments->first()->student;
-            $totalDue  = $payments->sum(fn ($p) => (float)$p->amount_due + (float)$p->fine - (float)$p->discount);
-            $totalPaid = $payments->sum('amount_paid');
-            $balance   = $totalDue - $totalPaid;
-
-            return [
-                'student'       => $student,
-                'payment_count' => $payments->count(),
-                'total_due'     => round($totalDue, 2),
-                'total_paid'    => round($totalPaid, 2),
-                'balance'       => round($balance, 2),
-                'payments'      => $payments->values(),
-            ];
-        })->values();
-
-        return Inertia::render('SchoolAdmin/Fees/Outstanding', [
-            'outstanding' => $byStudent,
-            'classes'     => SchoolClass::where('school_id', $sid)->orderBy('numeric_name')->get(['id', 'name']),
-            'filters'     => $request->only('class_id'),
-            'summary'     => [
-                'total_students'    => $byStudent->count(),
-                'total_outstanding' => round($byStudent->sum('balance'), 2),
-            ],
+        $payment = FeePayment::create([
+            'school_id'        => $schoolId,
+            'student_id'       => $student->id,
+            'fee_structure_id' => $feeStructure?->id,
+            'receipt_no'       => $validated['reference_no'] ?? ('RCP-' . date('Y') . '-' . str_pad(FeePayment::withoutGlobalScopes()->where('school_id', $schoolId)->count() + 1, 5, '0', STR_PAD_LEFT)),
+            'amount_due'       => $amountDue,
+            'amount_paid'      => $amountPaid,
+            'discount'         => $discount,
+            'fine'             => $fine,
+            'payment_date'     => $validated['payment_date'],
+            'month_year'       => $validated['month_year'] ?? date('Y-m', strtotime($validated['payment_date'])),
+            'method'           => $validated['method'],
+            'status'           => $status,
+            'note'             => $validated['note'] ?? 'Fee Payment Entry',
         ]);
+
+        try {
+            SendPaymentReceiptNotification::dispatch($payment);
+        } catch (\Throwable) {}
+
+        return redirect('/school/fees/payments')
+            ->with('success', "Payment recorded successfully. Receipt #{$payment->receipt_no} generated.");
     }
 
-    private function getStats(int $sid): array
+    public function show(FeePayment $feePayment): Response
     {
-        $base = FeePayment::where('school_id', $sid);
+        $schoolId = auth()->user()->school_id;
+        abort_unless($feePayment->school_id === $schoolId, 404);
 
-        return [
-            'total_collected'   => (float) (clone $base)->whereIn('status', ['paid', 'partial'])->sum('amount_paid'),
-            'total_outstanding' => (float) (clone $base)->whereIn('status', ['pending', 'partial', 'overdue'])
-                ->selectRaw('SUM(amount_due + fine - discount - amount_paid) as bal')->value('bal'),
-            'paid_count'        => (clone $base)->where('status', 'paid')->count(),
-            'pending_count'     => (clone $base)->whereIn('status', ['pending', 'overdue'])->count(),
-        ];
-    }
+        $relations = ['student.schoolClass', 'student.section'];
+        if (Schema::hasTable('fee_payment_allocations')) {
+            $relations[] = 'allocations.voteHead';
+            $relations[] = 'allocations.invoice';
+        }
 
-    private function findTenantStudent(int $studentId, int $schoolId): Student
-    {
-        return Student::withoutGlobalScopes()
-            ->whereKey($studentId)
-            ->where('school_id', $schoolId)
-            ->firstOrFail();
-    }
+        $payment = $feePayment->load($relations);
 
-    private function findTenantFeeStructure(int $feeStructureId, int $schoolId): FeeStructure
-    {
-        return FeeStructure::withoutGlobalScopes()
-            ->whereKey($feeStructureId)
-            ->where('school_id', $schoolId)
-            ->firstOrFail();
-    }
+        $school = School::find($schoolId);
+        $currentBalance = StudentLedgerService::computeBalance($payment->student_id, $schoolId);
 
-    private function findTenantClass(int $classId, int $schoolId): SchoolClass
-    {
-        return SchoolClass::withoutGlobalScopes()
-            ->whereKey($classId)
-            ->where('school_id', $schoolId)
-            ->firstOrFail();
+        return Inertia::render('SchoolAdmin/Fees/Receipt', [
+            'payment'        => $payment,
+            'school'         => $school,
+            'currentBalance' => $currentBalance,
+        ]);
     }
 }

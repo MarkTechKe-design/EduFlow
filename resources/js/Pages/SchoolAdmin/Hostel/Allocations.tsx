@@ -1,165 +1,206 @@
 import { useState } from 'react';
-import { router, usePage, Link } from '@inertiajs/react';
+import { usePage, useForm, Link, router } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, LogOut } from 'lucide-react';
-import type { PageProps, PaginatedResponse } from '@/Types';
+import { ArrowLeft, Plus, CheckCircle2, BedSingle } from 'lucide-react';
+import type { PageProps, Student } from '@/types';
 
-interface HostelOption { id: number; name: string; type: string; }
-interface RoomOption { id: number; room_no: string; floor: string | null; type: string; capacity: number; occupied: number; monthly_fee: string; ac: boolean; }
+interface HostelOption {
+    id: number;
+    name: string;
+    type: string;
+}
+
+interface RoomOption {
+    id: number;
+    hostel_id: number;
+    room_no: string;
+    floor: string | null;
+    type: string;
+    capacity: number;
+    occupied: number;
+    monthly_fee: string;
+    status: string;
+}
+
 interface Allocation {
-    id: number; bed_no: string | null; joining_date: string; leaving_date: string | null; status: string;
+    id: number;
+    bed_no: string | null;
+    joining_date: string;
+    leaving_date: string | null;
+    status: string;
     student?: { id: number; first_name: string; last_name: string | null; admission_no: string; school_class?: { name: string } };
     hostel?: { id: number; name: string; type: string };
     room?: { id: number; room_no: string; floor: string | null; type: string };
 }
-interface Props {
-    allocations: PaginatedResponse<Allocation>;
+
+interface Props extends PageProps {
+    allocations: { data: Allocation[]; meta?: { total: number }; current_page: number; last_page: number; links: any[] };
     hostels: HostelOption[];
+    rooms: RoomOption[];
+    students: Student[];
     filters: { hostel_id?: string; status?: string };
 }
 
-const aDefault = { hostel_id: '', room_id: '', student_search: '', student_id: '', bed_no: '', joining_date: new Date().toISOString().split('T')[0], fee_linked: 'true', notes: '' };
-
-export default function HostelAllocations({ allocations, hostels, filters }: Props) {
-    const { auth, flash } = usePage<PageProps>().props;
-    const canManage = auth.user?.role === 'school-admin';
-    const [open, setOpen]         = useState(false);
+export default function HostelAllocations({ allocations, hostels = [], rooms = [], students = [], filters }: Props) {
+    const { flash } = usePage<PageProps>().props;
+    const [open, setOpen] = useState(false);
     const [vacateOpen, setVacateOpen] = useState<Allocation | null>(null);
-    const [form, setForm]         = useState<Record<string, string>>(aDefault);
-    const [rooms, setRooms]       = useState<RoomOption[]>([]);
-    const [students, setStudents] = useState<{ id: number; first_name: string; last_name: string | null; admission_no: string }[]>([]);
     const [vacateDate, setVacateDate] = useState(new Date().toISOString().split('T')[0]);
-    const [saving, setSaving]     = useState(false);
+
+    const { data, setData, post, processing, errors, reset } = useForm({
+        hostel_id: '',
+        room_id: '',
+        student_id: '',
+        bed_no: '',
+        joining_date: new Date().toISOString().split('T')[0],
+        fee_linked: true,
+        notes: '',
+    });
+
+    const availableRooms = data.hostel_id
+        ? rooms.filter(r => String(r.hostel_id) === String(data.hostel_id) && r.occupied < r.capacity)
+        : [];
+
+    function handleHostelChange(val: string) {
+        setData(prev => ({
+            ...prev,
+            hostel_id: val,
+            room_id: '',
+        }));
+    }
 
     function applyFilter(key: string, value: string) {
-        router.get('/school/hostel/allocations', { ...filters, [key]: value || undefined }, { preserveScroll: true });
+        router.get('/school/hostel/allocations', { ...filters, [key]: value === 'all' || !value ? undefined : value }, { preserveScroll: true });
     }
 
-    async function loadRooms(hostelId: string) {
-        setForm(p => ({ ...p, hostel_id: hostelId, room_id: '' }));
-        if (!hostelId) { setRooms([]); return; }
-        const res = await fetch(`/school/hostel/${hostelId}/available-rooms`);
-        const data = await res.json();
-        setRooms(data);
-    }
-
-    function searchStudents(q: string) {
-        setForm(p => ({ ...p, student_search: q }));
-        if (q.length < 2) { setStudents([]); return; }
-        fetch(`/api/v1/students/search?q=${encodeURIComponent(q)}`)
-            .then(r => r.json())
-            .then(d => setStudents(d.data ?? []));
-    }
-
-    function handleAllocate() {
-        setSaving(true);
-        router.post('/school/hostel/allocations', form, {
+    function handleAllocate(e: React.FormEvent) {
+        e.preventDefault();
+        post('/school/hostel/allocations', {
             preserveScroll: true,
-            onSuccess: () => { setOpen(false); setForm(aDefault); setRooms([]); setStudents([]); setSaving(false); },
-            onError:   () => setSaving(false),
+            onSuccess: () => { setOpen(false); reset(); },
         });
     }
 
     function handleVacate() {
         if (!vacateOpen) return;
-        setSaving(true);
         router.put(`/school/hostel/allocations/${vacateOpen.id}/vacate`, { leaving_date: vacateDate }, {
             preserveScroll: true,
-            onSuccess: () => { setVacateOpen(null); setSaving(false); },
-            onError:   () => setSaving(false),
+            onSuccess: () => { setVacateOpen(null); },
         });
     }
 
-    const selectedRoom = rooms.find(r => String(r.id) === form.room_id);
-
     return (
-        <AppLayout title="Hostel Allocations">
-            <div className="space-y-6">
-                <div className="flex items-center justify-between">
+        <AppLayout title="Hostel Bed Allocations">
+            <div className="space-y-6 max-w-7xl mx-auto pb-16">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="flex items-center gap-3">
-                        <Link href="/school/hostel" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white">
+                        <Link href="/school/hostel" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900">
                             <ArrowLeft className="w-4 h-4" /> Hostels
                         </Link>
-                        <span className="text-slate-300 dark:text-slate-700">|</span>
+                        <span className="text-slate-300">|</span>
                         <div>
-                            <h1 className="text-xl font-bold text-slate-900 dark:text-white">Room Allocations</h1>
-                            <p className="text-sm text-slate-500">{allocations.meta?.total ?? 0} records</p>
+                            <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                                <BedSingle className="w-5 h-5 text-indigo-600" />
+                                <span>Room Allocations & Bed Register</span>
+                            </h1>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                                {allocations.meta?.total ?? allocations.data?.length ?? 0} active & archived resident student allocations
+                            </p>
                         </div>
                     </div>
-                    {canManage && (
-                        <Button onClick={() => setOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white inline-flex items-center gap-2">
-                            <Plus className="w-4 h-4" /> Allocate Room
-                        </Button>
-                    )}
+
+                    <Button
+                        onClick={() => { reset(); setOpen(true); }}
+                        className="bg-slate-900 hover:bg-slate-800 text-white inline-flex items-center gap-2 h-9 px-4 text-xs font-bold rounded-xl shadow-2xs"
+                    >
+                        <Plus className="w-4 h-4" /> Allocate Student
+                    </Button>
                 </div>
 
                 {flash?.success && (
-                    <div className="rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{flash.success}</div>
+                    <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-xs text-emerald-800 font-medium flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>{flash.success}</span>
+                    </div>
                 )}
 
-                <div className="flex gap-3">
-                    <Select value={filters.hostel_id ?? ''} onValueChange={v => applyFilter('hostel_id', v)}>
-                        <SelectTrigger className="w-44"><SelectValue placeholder="All Hostels" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="">All Hostels</SelectItem>
-                            {hostels.map(h => <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <Select value={filters.status ?? ''} onValueChange={v => applyFilter('status', v)}>
-                        <SelectTrigger className="w-36"><SelectValue placeholder="All Status" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="">All</SelectItem>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="left">Left</SelectItem>
-                        </SelectContent>
-                    </Select>
+                {/* Filters */}
+                <div className="flex gap-3 items-center">
+                    <div className="w-56">
+                        <Select value={filters?.hostel_id ?? 'all'} onValueChange={v => applyFilter('hostel_id', v)}>
+                            <SelectTrigger className="h-9 text-xs bg-white border-slate-200"><SelectValue placeholder="All Hostels" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Hostels</SelectItem>
+                                {hostels.map(h => <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="w-44">
+                        <Select value={filters?.status ?? 'all'} onValueChange={v => applyFilter('status', v)}>
+                            <SelectTrigger className="h-9 text-xs bg-white border-slate-200"><SelectValue placeholder="All Status" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Status</SelectItem>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="left">Checked Out</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-x-auto">
+                {/* Allocations Table */}
+                <div className="rounded-2xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
                     <Table>
                         <TableHeader>
-                            <TableRow className="bg-slate-50 dark:bg-slate-900">
-                                <TableHead>Student</TableHead>
-                                <TableHead>Hostel</TableHead>
-                                <TableHead>Room</TableHead>
-                                <TableHead>Bed</TableHead>
-                                <TableHead>Joining</TableHead>
-                                <TableHead>Leaving</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="w-16"></TableHead>
+                            <TableRow className="bg-slate-50 border-b border-slate-200">
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4">Student</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4">Hostel</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4">Room</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4">Bed No.</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4">Joining Date</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4">Leaving Date</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4">Status</TableHead>
+                                <TableHead className="text-[10px] font-bold uppercase text-slate-500 py-3 px-4 text-right">Action</TableHead>
                             </TableRow>
                         </TableHeader>
-                        <TableBody>
-                            {allocations.data.length === 0 ? (
-                                <TableRow><TableCell colSpan={8} className="text-center py-16 text-slate-400">No allocations found.</TableCell></TableRow>
+                        <TableBody className="font-medium text-xs divide-y divide-slate-100">
+                            {(!allocations.data || allocations.data.length === 0) ? (
+                                <TableRow>
+                                    <TableCell colSpan={8} className="text-center py-16 text-slate-400">
+                                        No room allocations found. Click &quot;Allocate Student&quot; to assign a resident student.
+                                    </TableCell>
+                                </TableRow>
                             ) : allocations.data.map(a => (
-                                <TableRow key={a.id}>
-                                    <TableCell>
-                                        <p className="font-medium text-sm text-slate-900 dark:text-white">{a.student?.first_name} {a.student?.last_name}</p>
-                                        <p className="text-xs text-slate-400">{a.student?.admission_no} · {a.student?.school_class?.name}</p>
+                                <TableRow key={a.id} className="hover:bg-slate-50/50 transition-colors">
+                                    <TableCell className="py-3 px-4">
+                                        <p className="font-bold text-slate-900">{a.student?.first_name} {a.student?.last_name}</p>
+                                        <p className="text-[10px] text-slate-400 font-mono">Adm: {a.student?.admission_no} • {a.student?.school_class?.name ?? '—'}</p>
                                     </TableCell>
-                                    <TableCell className="text-sm text-slate-600 dark:text-slate-400">{a.hostel?.name}</TableCell>
-                                    <TableCell className="text-sm text-slate-500">
-                                        {a.room?.room_no} {a.room?.floor ? `(${a.room.floor})` : ''}
+                                    <TableCell className="py-3 px-4 text-slate-700">{a.hostel?.name ?? '—'}</TableCell>
+                                    <TableCell className="py-3 px-4 text-slate-600 font-mono">Room {a.room?.room_no ?? '—'}</TableCell>
+                                    <TableCell className="py-3 px-4 font-mono text-indigo-600 font-bold">{a.bed_no ?? 'Bed 1'}</TableCell>
+                                    <TableCell className="py-3 px-4 font-mono text-slate-600">{a.joining_date}</TableCell>
+                                    <TableCell className="py-3 px-4 font-mono text-slate-600">{a.leaving_date ?? '—'}</TableCell>
+                                    <TableCell className="py-3 px-4">
+                                        <Badge variant="outline" className={`capitalize text-[10px] font-bold ${a.status === 'active' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600'}`}>
+                                            {a.status}
+                                        </Badge>
                                     </TableCell>
-                                    <TableCell className="text-sm text-slate-500">{a.bed_no ?? '—'}</TableCell>
-                                    <TableCell className="text-sm text-slate-500">{new Date(a.joining_date).toLocaleDateString()}</TableCell>
-                                    <TableCell className="text-sm text-slate-500">{a.leaving_date ? new Date(a.leaving_date).toLocaleDateString() : '—'}</TableCell>
-                                    <TableCell>
-                                        <Badge className={`border-0 text-xs capitalize ${a.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>{a.status}</Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        {canManage && a.status === 'active' && (
-                                            <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 inline-flex items-center gap-1"
-                                                onClick={() => { setVacateOpen(a); setVacateDate(new Date().toISOString().split('T')[0]); }}>
-                                                <LogOut className="w-3.5 h-3.5" />
+                                    <TableCell className="py-3 px-4 text-right">
+                                        {a.status === 'active' && (
+                                            <Button size="sm" variant="outline" onClick={() => setVacateOpen(a)} className="h-7 text-xs font-bold rounded-lg border-red-200 text-red-600 hover:bg-red-50">
+                                                Checkout
                                             </Button>
                                         )}
                                     </TableCell>
@@ -172,98 +213,101 @@ export default function HostelAllocations({ allocations, hostels, filters }: Pro
 
             {/* Allocate Dialog */}
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader><DialogTitle>Allocate Room</DialogTitle></DialogHeader>
-                    <div className="space-y-4 mt-2">
-                        <div className="space-y-1.5">
-                            <Label>Hostel <span className="text-red-500">*</span></Label>
-                            <Select value={form.hostel_id} onValueChange={loadRooms}>
-                                <SelectTrigger><SelectValue placeholder="Select hostel" /></SelectTrigger>
+                <DialogContent className="sm:max-w-md rounded-2xl">
+                    <DialogHeader><DialogTitle className="text-base font-bold text-slate-900">Allocate Student to Bed</DialogTitle></DialogHeader>
+                    <form onSubmit={handleAllocate} className="space-y-4 pt-2">
+                        <div>
+                            <Label className="text-xs font-bold">Student *</Label>
+                            <Select value={data.student_id} onValueChange={v => setData('student_id', v)}>
+                                <SelectTrigger className="h-9 text-xs mt-1"><SelectValue placeholder="Select student..." /></SelectTrigger>
                                 <SelectContent>
-                                    {hostels.map(h => <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>)}
+                                    {students.map(s => (
+                                        <SelectItem key={s.id} value={String(s.id)}>
+                                            {s.first_name} {s.last_name} ({s.admission_no})
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
+                            {errors.student_id && <p className="text-xs text-red-500 mt-1">{errors.student_id}</p>}
                         </div>
-                        {rooms.length > 0 && (
-                            <div className="space-y-1.5">
-                                <Label>Room <span className="text-red-500">*</span></Label>
-                                <Select value={form.room_id} onValueChange={v => setForm(p => ({ ...p, room_id: v }))}>
-                                    <SelectTrigger><SelectValue placeholder="Select room" /></SelectTrigger>
-                                    <SelectContent>
-                                        {rooms.map(r => (
-                                            <SelectItem key={r.id} value={String(r.id)}>
-                                                Room {r.room_no} {r.floor ? `(${r.floor})` : ''} — {r.type}{r.ac ? ' AC' : ''} · {r.capacity - r.occupied} beds left · KSh {Number(r.monthly_fee).toLocaleString()}/mo
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {selectedRoom && (
-                                    <p className="text-xs text-slate-500">{selectedRoom.capacity - selectedRoom.occupied} beds available</p>
-                                )}
-                            </div>
-                        )}
-                        <div className="space-y-1.5">
-                            <Label>Student ID / Name</Label>
-                            <Input
-                                value={form.student_search}
-                                onChange={e => searchStudents(e.target.value)}
-                                placeholder="Type to search..."
-                            />
+
+                        <div>
+                            <Label className="text-xs font-bold">Hostel Block *</Label>
+                            <Select value={data.hostel_id} onValueChange={handleHostelChange}>
+                                <SelectTrigger className="h-9 text-xs mt-1"><SelectValue placeholder="Select hostel..." /></SelectTrigger>
+                                <SelectContent>
+                                    {hostels.map(h => <SelectItem key={h.id} value={String(h.id)}>{h.name} ({h.type})</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                            {errors.hostel_id && <p className="text-xs text-red-500 mt-1">{errors.hostel_id}</p>}
                         </div>
-                        {students.length > 0 && (
-                            <div className="space-y-1.5">
-                                <Label>Select Student <span className="text-red-500">*</span></Label>
-                                <Select value={form.student_id} onValueChange={v => setForm(p => ({ ...p, student_id: v }))}>
-                                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                                    <SelectContent>
-                                        {students.map(s => (
-                                            <SelectItem key={s.id} value={String(s.id)}>
-                                                {s.first_name} {s.last_name} ({s.admission_no})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
+
+                        <div>
+                            <Label className="text-xs font-bold">Room / Cubicle *</Label>
+                            <Select
+                                value={data.room_id}
+                                onValueChange={v => setData('room_id', v)}
+                                disabled={!data.hostel_id || availableRooms.length === 0}
+                            >
+                                <SelectTrigger className="h-9 text-xs mt-1">
+                                    <SelectValue
+                                        placeholder={
+                                            !data.hostel_id
+                                                ? "Select hostel block first"
+                                                : availableRooms.length === 0
+                                                ? "No vacant rooms in this hostel"
+                                                : "Select available room..."
+                                        }
+                                    />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableRooms.map(r => (
+                                        <SelectItem key={r.id} value={String(r.id)}>
+                                            Room {r.room_no} — Cap: {r.capacity} (Occupied: {r.occupied})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {errors.room_id && <p className="text-xs text-red-500 mt-1">{errors.room_id}</p>}
+                        </div>
+
                         <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                                <Label>Bed No.</Label>
-                                <Input value={form.bed_no} onChange={e => setForm(p => ({ ...p, bed_no: e.target.value }))} placeholder="e.g. A1" />
+                            <div>
+                                <Label className="text-xs font-bold">Bed Number</Label>
+                                <Input value={data.bed_no} onChange={e => setData('bed_no', e.target.value)} placeholder="e.g. Bed A1" className="h-9 text-xs mt-1 font-mono" />
                             </div>
-                            <div className="space-y-1.5">
-                                <Label>Joining Date <span className="text-red-500">*</span></Label>
-                                <Input type="date" value={form.joining_date} onChange={e => setForm(p => ({ ...p, joining_date: e.target.value }))} />
+                            <div>
+                                <Label className="text-xs font-bold">Joining Date *</Label>
+                                <Input type="date" value={data.joining_date} onChange={e => setData('joining_date', e.target.value)} className="h-9 text-xs mt-1 font-mono" />
+                                {errors.joining_date && <p className="text-xs text-red-500 mt-1">{errors.joining_date}</p>}
                             </div>
                         </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                        <Button onClick={handleAllocate} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-                            {saving ? 'Allocating...' : 'Allocate'}
-                        </Button>
-                    </DialogFooter>
+
+                        <DialogFooter className="gap-2 pt-2">
+                            <Button type="button" variant="outline" onClick={() => setOpen(false)} className="h-9 text-xs rounded-xl">Cancel</Button>
+                            <Button type="submit" disabled={processing} className="h-9 text-xs font-bold px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl">Allocate</Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
 
             {/* Vacate Dialog */}
             <Dialog open={!!vacateOpen} onOpenChange={() => setVacateOpen(null)}>
-                <DialogContent className="sm:max-w-sm">
-                    <DialogHeader><DialogTitle>Vacate Room</DialogTitle></DialogHeader>
-                    <div className="space-y-3 mt-2">
-                        <div className="rounded-lg bg-slate-50 dark:bg-slate-900 p-3 text-sm">
-                            <p className="font-medium">{vacateOpen?.student?.first_name} {vacateOpen?.student?.last_name}</p>
-                            <p className="text-slate-500">{vacateOpen?.hostel?.name} · Room {vacateOpen?.room?.room_no}</p>
+                <DialogContent className="sm:max-w-sm rounded-2xl">
+                    <DialogHeader><DialogTitle className="text-base font-bold text-slate-900">Checkout Student</DialogTitle></DialogHeader>
+                    <div className="space-y-3 pt-2">
+                        <div className="rounded-xl bg-slate-50 p-3 text-xs">
+                            <p className="font-bold text-slate-900">{vacateOpen?.student?.first_name} {vacateOpen?.student?.last_name}</p>
+                            <p className="text-slate-500 mt-0.5">{vacateOpen?.hostel?.name} • Room {vacateOpen?.room?.room_no}</p>
                         </div>
-                        <div className="space-y-1.5">
-                            <Label>Leaving Date <span className="text-red-500">*</span></Label>
-                            <Input type="date" value={vacateDate} onChange={e => setVacateDate(e.target.value)} />
+                        <div>
+                            <Label className="text-xs font-bold">Leaving / Checkout Date *</Label>
+                            <Input type="date" value={vacateDate} onChange={e => setVacateDate(e.target.value)} className="h-9 text-xs mt-1 font-mono" />
                         </div>
                     </div>
-                    <DialogFooter>
-                        <Button variant="ghost" onClick={() => setVacateOpen(null)}>Cancel</Button>
-                        <Button onClick={handleVacate} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
-                            {saving ? 'Processing...' : 'Confirm Vacate'}
-                        </Button>
+                    <DialogFooter className="gap-2 pt-2">
+                        <Button type="button" variant="outline" onClick={() => setVacateOpen(null)} className="h-9 text-xs rounded-xl">Cancel</Button>
+                        <Button type="button" onClick={handleVacate} className="h-9 text-xs font-bold px-4 bg-red-600 hover:bg-red-700 text-white rounded-xl">Confirm Checkout</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

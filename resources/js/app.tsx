@@ -1,3 +1,17 @@
+import { Ziggy as ZiggyConfig } from './ziggy';
+
+if (typeof window !== 'undefined') {
+    const runtimeZiggy = (window as any).Ziggy;
+    (window as any).Ziggy = {
+        ...ZiggyConfig,
+        ...(runtimeZiggy || {}),
+        routes: {
+            ...(ZiggyConfig?.routes || {}),
+            ...(runtimeZiggy?.routes || {}),
+        },
+    };
+    (globalThis as any).Ziggy = (window as any).Ziggy;
+}
 import '../css/app.css';
 import { Component, type ReactNode } from 'react';
 import { createInertiaApp } from '@inertiajs/react';
@@ -20,6 +34,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
         return this.props.children;
     }
 }
+
 
 const appName = document.title;
 

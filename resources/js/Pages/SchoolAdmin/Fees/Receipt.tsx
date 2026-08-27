@@ -1,159 +1,197 @@
-import { Link } from '@inertiajs/react';
+import React from 'react';
+import { Head, Link } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Printer } from 'lucide-react';
+import type { PageProps } from '@/Types';
+import { Button } from '@/Components/ui/button';
+import { formatDate } from '@/lib/utils';
+import {
+    ArrowLeft,
+    CheckCircle2,
+    Printer
+} from 'lucide-react';
 
-interface FeePayment {
-    id: number; receipt_no: string; amount_due: string; amount_paid: string;
-    discount: string; fine: string; payment_date: string | null; month_year: string | null;
-    method: string; status: string; note: string | null; created_at: string;
-    student?: {
-        id: number; first_name: string; last_name: string | null;
-        admission_no: string; school_class?: { name: string };
-    };
-    fee_structure?: {
-        id: number; academic_year: string; frequency: string;
-        fee_category?: { name: string; type: string };
-    };
+interface FeeAllocation {
+    id: number;
+    amount: string | number;
+    vote_head?: { name: string; category: string } | null;
+    invoice?: { invoice_number: string; term: string } | null;
 }
 
-const STATUS_STYLE: Record<string, string> = {
-    paid:    'bg-green-100 text-green-700',
-    partial: 'bg-amber-100 text-amber-700',
-    pending: 'bg-slate-100 text-slate-600',
-    overdue: 'bg-red-100 text-red-700',
-};
-const METHOD_LABELS: Record<string, string> = {
-    cash: 'Cash', card: 'Card', online: 'Online', mpesa: 'M-Pesa', airtel_money: 'Airtel Money', bank_transfer: 'Bank Transfer', bkash: 'M-Pesa', nagad: 'Airtel Money', rocket: 'Bank Transfer',
-};
+interface Props extends PageProps {
+    payment: {
+        id: number;
+        receipt_no: string;
+        amount_due: string | number;
+        amount_paid: string | number;
+        discount: string | number;
+        payment_date: string;
+        method: string;
+        note?: string | null;
+        student?: {
+            first_name: string;
+            last_name: string;
+            admission_no: string;
+            school_class?: { name: string } | null;
+            section?: { name: string } | null;
+        } | null;
+        allocations: FeeAllocation[];
+    };
+    school?: {
+        name: string;
+        address?: string | null;
+        phone?: string | null;
+        email?: string | null;
+    } | null;
+    currentBalance: number;
+}
 
-export default function FeeReceipt({ payment }: { payment: FeePayment }) {
-    const balance = Number(payment.amount_due) + Number(payment.fine) - Number(payment.discount) - Number(payment.amount_paid);
+export default function FeeReceiptView({ payment, school, currentBalance }: Props) {
+    const handlePrint = () => {
+        window.print();
+    };
 
     return (
-        <AppLayout title={`Receipt — ${payment.receipt_no}`}>
-            <div className="max-w-xl mx-auto space-y-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <Link href="/school/fees/payments" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white">
-                            <ArrowLeft className="w-4 h-4" /> Payments
-                        </Link>
-                        <span className="text-slate-300 dark:text-slate-700">|</span>
-                        <h1 className="text-xl font-bold text-slate-900 dark:text-white">Receipt</h1>
-                    </div>
-                    <Button variant="outline" onClick={() => window.print()} className="inline-flex items-center gap-2">
-                        <Printer className="w-4 h-4" /> Print
+        <AppLayout header={`Official Receipt #${payment.receipt_no}`}>
+            <Head title={`Receipt ${payment.receipt_no} - EduFlow`} />
+
+            <div className="max-w-3xl mx-auto space-y-6">
+                <div className="print:hidden flex items-center justify-between gap-4">
+                    <Link
+                        href="/school/fees/payments"
+                        className="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400"
+                    >
+                        <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+                        Back to Payments List
+                    </Link>
+
+                    <Button
+                        onClick={handlePrint}
+                        size="sm"
+                        className="h-9 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                    >
+                        <Printer className="w-3.5 h-3.5 mr-1.5" />
+                        Print Official Receipt
                     </Button>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden print:shadow-none">
-                    {/* Header */}
-                    <div className="bg-indigo-600 text-white px-6 py-5">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h2 className="text-lg font-bold">Fee Receipt</h2>
-                                <p className="text-indigo-200 text-sm mt-0.5">EduFlow</p>
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 shadow-sm space-y-6 print:border-0 print:p-0 print:shadow-none text-slate-900 dark:text-white">
+                    <div className="flex justify-between items-start border-b border-slate-200 dark:border-slate-800 pb-6">
+                        <div>
+                            <h2 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                                {school?.name || 'EduFlow Academy'}
+                            </h2>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                                {school?.address || 'P.O. Box 100 - Nairobi, Kenya'} &bull; Tel: {school?.phone || '+254 700 000000'}
+                            </p>
+                            <p className="text-xs text-slate-500">Email: {school?.email || 'bursar@eduflow.test'}</p>
+                        </div>
+
+                        <div className="text-right">
+                            <span className="inline-block px-3 py-1 rounded bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-mono text-xs font-bold uppercase tracking-wider">
+                                Official Fee Receipt
+                            </span>
+                            <div className="mt-2 text-xs text-slate-500">
+                                Receipt No: <strong className="font-mono text-slate-900 dark:text-white">{payment.receipt_no}</strong>
                             </div>
-                            <div className="text-right">
-                                <p className="font-mono text-sm text-indigo-200">Receipt No.</p>
-                                <p className="font-mono font-bold">{payment.receipt_no}</p>
+                            <div className="text-xs text-slate-500">
+                                Date: <strong>{formatDate(payment.payment_date)}</strong>
                             </div>
                         </div>
                     </div>
 
-                    <div className="p-6 space-y-5">
-                        {/* Student Info */}
-                        <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
-                            <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wide">Student</p>
-                                <p className="font-semibold text-slate-900 dark:text-white mt-0.5">
-                                    {payment.student?.first_name} {payment.student?.last_name}
-                                </p>
-                                <p className="text-sm text-slate-500">{payment.student?.admission_no}</p>
+                    <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs">
+                        <div className="space-y-1">
+                            <div className="text-slate-500 font-semibold">Learner Information:</div>
+                            <div className="font-bold text-sm text-slate-900 dark:text-white">
+                                {payment.student?.first_name} {payment.student?.last_name}
                             </div>
-                            <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wide">Class</p>
-                                <p className="font-medium text-slate-700 dark:text-slate-300 mt-0.5">{payment.student?.school_class?.name}</p>
-                            </div>
+                            <div>Admission Number: <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{payment.student?.admission_no}</span></div>
+                            <div>Class / Stream: <strong>{payment.student?.school_class?.name || 'Class'} {payment.student?.section ? `(${payment.student.section.name})` : ''}</strong></div>
                         </div>
 
-                        {/* Fee Details */}
-                        <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
-                            <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wide">Fee Type</p>
-                                <p className="font-medium text-slate-700 dark:text-slate-300 mt-0.5">{payment.fee_structure?.fee_category?.name}</p>
-                                <p className="text-xs text-slate-400 capitalize">{payment.fee_structure?.fee_category?.type}</p>
+                        <div className="space-y-1 text-right">
+                            <div className="text-slate-500 font-semibold">Payment Channel:</div>
+                            <div className="font-bold text-sm uppercase text-slate-900 dark:text-white">
+                                {payment.method.replace(/_/g, ' ')}
                             </div>
-                            <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wide">Academic Year</p>
-                                <p className="font-medium text-slate-700 dark:text-slate-300 mt-0.5">{payment.fee_structure?.academic_year}</p>
-                                {payment.month_year && <p className="text-xs text-slate-400">Month: {payment.month_year}</p>}
+                            <div>Transaction Note: <span className="text-slate-600 dark:text-slate-400">{payment.note || 'Direct Settlement'}</span></div>
+                            <div className="inline-flex items-center gap-1 text-emerald-600 font-bold mt-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Verified & Cleared
                             </div>
                         </div>
+                    </div>
 
-                        {/* Amount Breakdown */}
-                        <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                                <span className="text-slate-500">Amount Due</span>
-                                <span className="text-slate-900 dark:text-white">KSh {Number(payment.amount_due).toLocaleString()}</span>
-                            </div>
-                            {Number(payment.fine) > 0 && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-red-500">Fine</span>
-                                    <span className="text-red-500">+ KSh {Number(payment.fine).toLocaleString()}</span>
-                                </div>
-                            )}
-                            {Number(payment.discount) > 0 && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-green-500">Discount</span>
-                                    <span className="text-green-500">- KSh {Number(payment.discount).toLocaleString()}</span>
-                                </div>
-                            )}
-                            <div className="border-t border-slate-100 dark:border-slate-800 pt-2 flex justify-between font-semibold">
-                                <span className="text-slate-700 dark:text-slate-300">Net Due</span>
-                                <span className="text-slate-900 dark:text-white">
-                                    KSh {(Number(payment.amount_due) + Number(payment.fine) - Number(payment.discount)).toLocaleString()}
+                    <div className="space-y-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                            Vote Head Allocation Breakdown
+                        </h4>
+                        <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500">
+                                    <th className="py-2.5">Item / Vote Head</th>
+                                    <th className="py-2.5">Target Obligation</th>
+                                    <th className="py-2.5 text-right">Amount Allocated</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {payment.allocations && payment.allocations.length > 0 ? (
+                                    payment.allocations.map((alloc) => (
+                                        <tr key={alloc.id}>
+                                            <td className="py-2.5 font-medium text-slate-900 dark:text-white">
+                                                {alloc.vote_head?.name || 'General Tuition'}
+                                            </td>
+                                            <td className="py-2.5 text-slate-500 font-mono">
+                                                {alloc.invoice?.invoice_number ? `${alloc.invoice.invoice_number} (${alloc.invoice.term})` : 'Term Obligation'}
+                                            </td>
+                                            <td className="py-2.5 text-right font-mono font-bold text-slate-900 dark:text-white">
+                                                KSh {Number(alloc.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td className="py-2.5 font-medium text-slate-900 dark:text-white">General Fee Account Credit</td>
+                                        <td className="py-2.5 text-slate-500 font-mono">Student Account Ledger</td>
+                                        <td className="py-2.5 text-right font-mono font-bold text-slate-900 dark:text-white">
+                                            KSh {Number(payment.amount_paid).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex justify-end">
+                        <div className="w-64 space-y-2 text-xs">
+                            <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                                <span>Amount Received:</span>
+                                <span className="font-bold text-slate-900 dark:text-white font-mono">
+                                    KSh {Number(payment.amount_paid).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </span>
                             </div>
-                            <div className="flex justify-between font-bold text-lg">
-                                <span className="text-slate-700 dark:text-slate-300">Amount Paid</span>
-                                <span className="text-green-600">KSh {Number(payment.amount_paid).toLocaleString()}</span>
-                            </div>
-                            {balance > 0 && (
-                                <div className="flex justify-between text-sm font-medium text-red-600">
-                                    <span>Balance Due</span>
-                                    <span>KSh {balance.toLocaleString()}</span>
-                                </div>
-                            )}
-                        </div>
 
-                        {/* Payment Info */}
-                        <div className="grid grid-cols-3 gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
-                            <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wide">Date</p>
-                                <p className="font-medium text-slate-700 dark:text-slate-300 text-sm mt-0.5">
-                                    {payment.payment_date ? new Date(payment.payment_date).toLocaleDateString() : '—'}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wide">Method</p>
-                                <p className="font-medium text-slate-700 dark:text-slate-300 text-sm mt-0.5">{METHOD_LABELS[payment.method] ?? payment.method}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wide">Status</p>
-                                <Badge className={`border-0 text-xs capitalize mt-0.5 ${STATUS_STYLE[payment.status] ?? ''}`}>{payment.status}</Badge>
+                            <div className="flex justify-between border-t border-slate-200 dark:border-slate-800 pt-2 text-sm font-bold">
+                                <span>Remaining Ledger Balance:</span>
+                                <span className={`font-mono ${currentBalance > 0 ? 'text-amber-600 font-bold' : 'text-emerald-600'}`}>
+                                    KSh {Number(currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
                             </div>
                         </div>
+                    </div>
 
-                        {payment.note && (
-                            <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wide">Note</p>
-                                <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">{payment.note}</p>
+                    <div className="pt-10 flex justify-between items-end text-xs text-slate-500 border-t border-slate-100 dark:border-slate-800">
+                        <div>
+                            <div className="w-44 border-b border-slate-300 dark:border-slate-700 pb-1 font-semibold text-slate-900 dark:text-white text-center">
+                                Accounts / Bursar
                             </div>
-                        )}
+                            <div className="text-[10px] text-center mt-1">Authorized Official Signature</div>
+                        </div>
 
-                        <p className="text-xs text-center text-slate-400 pt-2">Generated on {new Date(payment.created_at).toLocaleString()}</p>
+                        <div className="text-right space-y-1">
+                            <div className="text-[10px] text-slate-400 font-mono">Verified by EduFlow Ledger Engine</div>
+                            <div className="text-[10px] text-slate-400">Generated on {new Date().toLocaleString()}</div>
+                        </div>
                     </div>
                 </div>
             </div>

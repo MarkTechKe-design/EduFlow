@@ -1,0 +1,196 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\NationalCocurricularCalendar;
+use Illuminate\Database\Seeder;
+
+class NationalCocurricularCalendarSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $templates = [
+            // --- Secondary (KSSSA) ---
+            [
+                'academic_year'      => '2026',
+                'term'               => 'Term 1',
+                'category_name'      => 'Sports & Games',
+                'activity_name'      => 'KSSSA Term 1 Games (Basketball, Hockey, Rugby 15s, Athletics, Swimming)',
+                'education_level'    => 'secondary',
+                'age_bracket'        => 'under_19',
+                'competition_level'  => 'national',
+                'start_date'         => '2026-04-06',
+                'end_date'           => '2026-04-12',
+                'reporting_date'     => '2026-04-05',
+                'departure_date'     => '2026-04-13',
+                'venue'              => 'Machakos School & Kenyatta Stadium',
+                'host_county'        => 'Machakos',
+                'host_region'        => 'Eastern',
+                'circular_reference' => 'MOE/KSSSA/CAL/2026/01',
+                'remarks'            => 'Official MoE circular planning template. Dates subject to regional sports council ratification.',
+            ],
+            [
+                'academic_year'      => '2026',
+                'term'               => 'Term 1',
+                'category_name'      => 'Performing Arts',
+                'activity_name'      => 'Kenya National Drama and Film Festival (KNDFF)',
+                'education_level'    => 'secondary',
+                'age_bracket'        => 'under_19',
+                'competition_level'  => 'national',
+                'start_date'         => '2026-04-14',
+                'end_date'           => '2026-04-24',
+                'reporting_date'     => '2026-04-13',
+                'departure_date'     => '2026-04-25',
+                'venue'              => 'Shanzu Teachers College & Kangaru',
+                'host_county'        => 'Mombasa',
+                'host_region'        => 'Coast',
+                'circular_reference' => 'MOE/KNDFF/2026/02',
+                'remarks'            => 'Template schedule for Secondary and JSS drama, poetry, cultural dances, and film categories.',
+            ],
+            [
+                'academic_year'      => '2026',
+                'term'               => 'Term 2',
+                'category_name'      => 'Sports & Games',
+                'activity_name'      => 'KSSSA Term 2 Games (Football, Volleyball, Netball, Rugby 7s, Table Tennis, Badminton)',
+                'education_level'    => 'secondary',
+                'age_bracket'        => 'under_19',
+                'competition_level'  => 'national',
+                'start_date'         => '2026-08-03',
+                'end_date'           => '2026-08-09',
+                'reporting_date'     => '2026-08-02',
+                'departure_date'     => '2026-08-10',
+                'venue'              => 'Kakamega High & Bukhungu Stadium',
+                'host_county'        => 'Kakamega',
+                'host_region'        => 'Western',
+                'circular_reference' => 'MOE/KSSSA/CAL/2026/03',
+                'remarks'            => 'National finals determining qualifiers for the East Africa (FEASSSA) Games.',
+            ],
+            [
+                'academic_year'      => '2026',
+                'term'               => 'Term 2',
+                'category_name'      => 'Performing Arts',
+                'activity_name'      => 'Kenya National Music Festival (KNMF)',
+                'education_level'    => 'secondary',
+                'age_bracket'        => 'under_19',
+                'competition_level'  => 'national',
+                'start_date'         => '2026-08-10',
+                'end_date'           => '2026-08-20',
+                'reporting_date'     => '2026-08-09',
+                'departure_date'     => '2026-08-21',
+                'venue'              => 'Dedan Kimathi University',
+                'host_county'        => 'Nyeri',
+                'host_region'        => 'Central',
+                'circular_reference' => 'MOE/KNMF/2026/04',
+                'remarks'            => 'Gala performances and State Concert schedule template.',
+            ],
+            [
+                'academic_year'      => '2026',
+                'term'               => 'Term 3',
+                'category_name'      => 'International / Regional',
+                'activity_name'      => 'Federation of East Africa Secondary School Sports Association (FEASSSA) Games',
+                'education_level'    => 'secondary',
+                'age_bracket'        => 'under_19',
+                'competition_level'  => 'eassrc',
+                'start_date'         => '2026-08-24',
+                'end_date'           => '2026-09-02',
+                'reporting_date'     => '2026-08-23',
+                'departure_date'     => '2026-09-03',
+                'venue'              => 'Kampala Stadium Complex',
+                'host_county'        => 'Kampala',
+                'host_region'        => 'Uganda (East Africa)',
+                'circular_reference' => 'FEASSSA/GEN/2026/01',
+                'remarks'            => 'Regional championship featuring Kenya, Uganda, Rwanda, Tanzania, and Burundi champions.',
+            ],
+
+            // --- Junior Secondary School (JSS) ---
+            [
+                'academic_year'      => '2026',
+                'term'               => 'Term 1',
+                'category_name'      => 'Sports & Games',
+                'activity_name'      => 'JSS National Athletics & Cross Country Championships',
+                'education_level'    => 'jss',
+                'age_bracket'        => 'under_15',
+                'competition_level'  => 'national',
+                'start_date'         => '2026-04-08',
+                'end_date'           => '2026-04-11',
+                'reporting_date'     => '2026-04-07',
+                'departure_date'     => '2026-04-12',
+                'venue'              => 'Afraha Stadium',
+                'host_county'        => 'Nakuru',
+                'host_region'        => 'Rift Valley',
+                'circular_reference' => 'MOE/JSS/ATH/2026/01',
+                'remarks'            => 'CBC Grade 7, 8 and 9 junior secondary learner championship template.',
+            ],
+            [
+                'academic_year'      => '2026',
+                'term'               => 'Term 2',
+                'category_name'      => 'Academic & STEM',
+                'activity_name'      => 'Kenya Science and Engineering Fair (KSEF) - Junior & Senior',
+                'education_level'    => 'jss',
+                'age_bracket'        => 'under_15',
+                'competition_level'  => 'national',
+                'start_date'         => '2026-06-15',
+                'end_date'           => '2026-06-19',
+                'reporting_date'     => '2026-06-14',
+                'departure_date'     => '2026-06-20',
+                'venue'              => 'Moi Girls High School Eldoret',
+                'host_county'        => 'Uasin Gishu',
+                'host_region'        => 'Rift Valley',
+                'circular_reference' => 'MOE/KSEF/2026/01',
+                'remarks'            => 'STEM robotics, software, environmental innovation, and mathematics exhibitions.',
+            ],
+
+            // --- Primary Schools (KPSSA) ---
+            [
+                'academic_year'      => '2026',
+                'term'               => 'Term 1',
+                'category_name'      => 'Sports & Games',
+                'activity_name'      => 'KPSSA National Primary Schools Track & Field Athletics',
+                'education_level'    => 'primary',
+                'age_bracket'        => 'under_13',
+                'competition_level'  => 'national',
+                'start_date'         => '2026-04-07',
+                'end_date'           => '2026-04-10',
+                'reporting_date'     => '2026-04-06',
+                'departure_date'     => '2026-04-11',
+                'venue'              => 'Kisumu Boys High School Ground',
+                'host_county'        => 'Kisumu',
+                'host_region'        => 'Nyanza',
+                'circular_reference' => 'MOE/KPSSA/2026/01',
+                'remarks'            => 'Primary school athletics and kids-athletics program template.',
+            ],
+
+            // --- Special Education Needs (SNE) ---
+            [
+                'academic_year'      => '2026',
+                'term'               => 'Term 1',
+                'category_name'      => 'Special Needs Sports',
+                'activity_name'      => 'National Special Schools Paralympic & Goalball Games',
+                'education_level'    => 'special',
+                'age_bracket'        => 'open',
+                'competition_level'  => 'national',
+                'start_date'         => '2026-04-15',
+                'end_date'           => '2026-04-19',
+                'reporting_date'     => '2026-04-14',
+                'departure_date'     => '2026-04-20',
+                'venue'              => 'Joytown Special School',
+                'host_county'        => 'Kiambu',
+                'host_region'        => 'Central',
+                'circular_reference' => 'MOE/SNE/2026/01',
+                'remarks'            => 'Inclusive sports for learners with hearing, visual, physical, and intellectual adaptations.',
+            ],
+        ];
+
+        foreach ($templates as $t) {
+            NationalCocurricularCalendar::updateOrCreate(
+                [
+                    'academic_year'   => $t['academic_year'],
+                    'term'            => $t['term'],
+                    'activity_name'   => $t['activity_name'],
+                    'education_level' => $t['education_level'],
+                ],
+                $t
+            );
+        }
+    }
+}

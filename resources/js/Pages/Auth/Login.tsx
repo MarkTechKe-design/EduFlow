@@ -28,23 +28,14 @@ function EduFlowBrandLogo({ light = false }: { light?: boolean }) {
                     Edu<span className="text-emerald-400">Flow</span>
                 </span>
                 <span className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${light ? 'text-indigo-200' : 'text-slate-400'}`}>
-                    Educate · Empower · Excel
+                    Educate Â· Empower Â· Excel
                 </span>
             </div>
         </div>
     );
 }
 
-function GoogleIcon({ className = "w-4 h-4" }: { className?: string }) {
-    return (
-        <svg className={className} viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
-            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"/>
-            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.04 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
-            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-        </svg>
-    );
-}
+
 
 export default function Login({ 
     status, 
@@ -200,7 +191,7 @@ export default function Login({
                         </div>
 
                         <p className="text-[11px] text-indigo-300/60 pt-2">
-                            © {new Date().getFullYear()} EduFlow. All rights reserved.
+                            Â© {new Date().getFullYear()} EduFlow. All rights reserved.
                         </p>
                     </div>
                 </div>
@@ -295,7 +286,7 @@ export default function Login({
                                         onClick={() => setShowPassword(!showPassword)}
                                         aria-label={showPassword ? 'Hide password' : 'Show password'}
                                         aria-pressed={showPassword}
-                                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer"
                                     >
                                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                     </button>
@@ -345,13 +336,7 @@ export default function Login({
                                 </span>
                             </div>
 
-                            <a
-                                href="/auth/google"
-                                className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs sm:text-sm shadow-xs transition-all flex items-center justify-center gap-2.5 focus:outline-none focus:ring-2 focus:ring-slate-300"
-                            >
-                                <GoogleIcon className="w-4 h-4" />
-                                <span>Continue with Google</span>
-                            </a>
+                            
 
                         </form>
 
@@ -364,9 +349,7 @@ export default function Login({
 
                     <div className="mt-8 pt-4 border-t border-slate-100 text-center text-xs text-slate-500">
                         New institution?{' '}
-                        <Link href="/register" className="font-bold text-indigo-600 hover:text-indigo-700 underline focus:outline-none">
-                            Setup My School
-                        </Link>
+                        <Link href="/register-school" className="inline-flex items-center justify-center px-5 py-2.5 rounded-full text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-colors">Setup My School &rsaquo;</Link>
                     </div>
 
                 </div>

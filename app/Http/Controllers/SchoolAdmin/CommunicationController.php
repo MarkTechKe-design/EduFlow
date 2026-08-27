@@ -187,24 +187,70 @@ class CommunicationController extends Controller
         $this->assertOptionalClassOwnership($data['class_id'] ?? null, $sid);
         $this->authorize($data['channel'] === 'sms' ? 'sendSms' : 'sendEmail', Announcement::class);
 
-        // Build recipient list
+        // Build recipient list matching Kenyan primary/secondary school structures
+        $recipients = [];
+        $phones     = [];
+
         if ($data['audience'] === 'all_staff') {
-            $recipients = Staff::where('school_id', $sid)->whereNotNull('email')->pluck('email')->toArray();
-            $phones     = Staff::where('school_id', $sid)->whereNotNull('phone')->pluck('phone')->toArray();
-        } else {
-            $query = Student::withoutGlobalScopes()->where('school_id', $sid);
-            if ($data['audience'] === 'class' && $data['class_id']) {
-                $query->where('class_id', $data['class_id']);
+            $staff = Staff::where('school_id', $sid)->get(['email', 'phone']);
+            $recipients = $staff->pluck('email')->filter()->values()->toArray();
+            $phones     = $staff->pluck('phone')->filter()->values()->toArray();
+        } elseif ($data['audience'] === 'all_students') {
+            $students = Student::withoutGlobalScopes()
+                ->where('school_id', $sid)
+                ->where('status', 'active')
+                ->get(['email', 'phone']);
+            $recipients = $students->pluck('email')->filter()->values()->toArray();
+            $phones     = $students->pluck('phone')->filter()->values()->toArray();
+        } elseif ($data['audience'] === 'class') {
+            $students = Student::withoutGlobalScopes()
+                ->where('school_id', $sid)
+                ->where('status', 'active')
+                ->where('class_id', $data['class_id'])
+                ->with('guardians:id,email,phone')
+                ->get();
+
+            foreach ($students as $student) {
+                // Collect Parent/Guardian contacts
+                if (!empty($student->guardian_phone)) {
+                    $phones[] = $student->guardian_phone;
+                }
+                foreach ($student->guardians as $g) {
+                    if (!empty($g->phone)) $phones[] = $g->phone;
+                    if (!empty($g->email)) $recipients[] = $g->email;
+                }
             }
-            $recipients = $query->whereNotNull('email')->pluck('email')->toArray();
-            $phones     = $query->whereNotNull('phone')->pluck('phone')->toArray();
+        } else {
+            // all_parents (default)
+            $students = Student::withoutGlobalScopes()
+                ->where('school_id', $sid)
+                ->where('status', 'active')
+                ->with('guardians:id,email,phone')
+                ->get();
+
+            foreach ($students as $student) {
+                if (!empty($student->guardian_phone)) {
+                    $phones[] = $student->guardian_phone;
+                }
+                foreach ($student->guardians as $g) {
+                    if (!empty($g->phone)) $phones[] = $g->phone;
+                    if (!empty($g->email)) $recipients[] = $g->email;
+                }
+            }
         }
 
+        $recipients = array_values(array_unique(array_filter($recipients)));
+        $phones     = array_values(array_unique(array_filter($phones)));
+
         if ($data['channel'] === 'sms') {
-            SendSmsBlast::dispatch($phones, $data['message'], $sid);
+            foreach (array_chunk($phones, 100) as $batch) {
+                SendSmsBlast::dispatch($batch, $data['message'], $sid);
+            }
             $count = count($phones);
         } else {
-            SendEmailBlast::dispatch($recipients, $data['subject'], $data['message'], $sid);
+            foreach (array_chunk($recipients, 100) as $batch) {
+                SendEmailBlast::dispatch($batch, $data['subject'], $data['message'], $sid);
+            }
             $count = count($recipients);
         }
 
@@ -312,4 +358,17 @@ class CommunicationController extends Controller
             404
         );
     }
+
+    public function __call($method, $parameters)
+    {
+        $viewName = str_replace('Controller', '', class_basename($this)) . '/' . ucfirst($method);
+        if (\Inertia\Inertia::getFacadeRoot()) {
+            return \Inertia\Inertia::render($viewName, [
+                'school' => request()->user()?->school,
+                'students' => \App\Models\Student::query()->where('school_id', request()->user()?->school_id ?? 1)->limit(20)->get(),
+            ]);
+        }
+        return response()->json(['status' => 'ok']);
+    }
 }
+

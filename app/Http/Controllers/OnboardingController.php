@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AcademicYear;
+use App\Models\PlatformSetting;
 use App\Models\School;
 use App\Models\SchoolSetting;
 use Illuminate\Http\RedirectResponse;
@@ -16,8 +17,12 @@ class OnboardingController extends Controller
 {
     public function index(Request $request): Response|RedirectResponse
     {
-        $school = School::find($request->user()->school_id);
+        $user = $request->user();
+        if (!$user || !$user->school_id) {
+            return redirect()->route('dashboard');
+        }
 
+        $school = School::where('id', $user->school_id)->first();
         if (!$school) {
             return redirect()->route('dashboard');
         }
@@ -26,9 +31,16 @@ class OnboardingController extends Controller
             return redirect()->route('dashboard');
         }
 
+        $branding = PlatformSetting::get('branding') ?? [];
+
         return Inertia::render('Onboarding/Index', [
             'school'   => $school,
             'settings' => SchoolSetting::allFor($school->id),
+            'branding' => [
+                'name'          => $branding['name'] ?? config('app.name', 'EduFlow'),
+                'support_phone' => $branding['support_phone'] ?? '+254 718 178521',
+                'support_email' => $branding['support_email'] ?? 'support@eduflow.co.ke',
+            ],
             'steps'    => [
                 'school'   => 'School details',
                 'academic' => 'Academic setup',
@@ -40,21 +52,23 @@ class OnboardingController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
-        $school = School::find($request->user()->school_id);
-        abort_unless($school, 404);
+        $user = $request->user();
+        abort_unless($user && $user->school_id, 403, 'Unauthorized tenant context.');
+
+        $school = School::where('id', $user->school_id)->firstOrFail();
 
         $data = $request->validate([
-            'name'          => 'required|string|max:150',
-            'phone'         => 'nullable|string|max:30',
-            'address'       => 'nullable|string|max:500',
-            'city'          => 'nullable|string|max:100',
-            'country'       => 'required|string|size:2',
-            'timezone'      => 'required|string|max:60',
-            'currency'      => 'required|string|size:3',
-            'language'      => 'required|in:en,sw,fr,ar',
-            'curriculum'    => 'required|in:cbc,844',
-            'academic_year' => 'required|string|max:30',
-            'logo'          => 'nullable|image|max:2048',
+            'name'          => ['required', 'string', 'max:150'],
+            'phone'         => ['nullable', 'string', 'max:30'],
+            'address'       => ['nullable', 'string', 'max:500'],
+            'city'          => ['nullable', 'string', 'max:100'],
+            'country'       => ['required', 'string', 'size:2'],
+            'timezone'      => ['required', 'string', 'max:60'],
+            'currency'      => ['required', 'string', 'size:3'],
+            'language'      => ['required', 'in:en,sw,fr,ar'],
+            'curriculum'    => ['required', 'in:cbc,844,dual,international'],
+            'academic_year' => ['required', 'string', 'max:30'],
+            'logo'          => ['nullable', 'image', 'max:2048'],
         ]);
 
         DB::transaction(function () use ($school, $data, $request): void {
@@ -65,12 +79,20 @@ class OnboardingController extends Controller
                 $data['logo'] = $request->file('logo')->store("schools/{$school->id}", 'public');
             }
 
-            $school->update($data + ['onboarding_completed_at' => now()]);
+            $academicYearName = $data['academic_year'];
+            unset($data['academic_year']);
+
+            $school->update(array_merge($data, [
+                'onboarding_completed_at' => now(),
+            ]));
 
             AcademicYear::updateOrCreate(
-                ['school_id' => $school->id, 'is_current' => true],
                 [
-                    'name'       => $data['academic_year'],
+                    'school_id'  => $school->id,
+                    'is_current' => true,
+                ],
+                [
+                    'name'       => $academicYearName,
                     'start_date' => now()->startOfYear(),
                     'end_date'   => now()->endOfYear(),
                 ]

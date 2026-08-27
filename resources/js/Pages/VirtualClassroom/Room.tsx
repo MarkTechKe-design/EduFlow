@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import {
-    Video, ArrowLeft, ExternalLink, ShieldCheck,
-    Clock, LogOut
+    ArrowLeft, ShieldCheck, Clock, LogOut,
+    Copy, Check, ExternalLink, Maximize2
 } from 'lucide-react';
 
 interface SessionData {
@@ -35,77 +35,93 @@ interface Props {
 }
 
 export default function VirtualClassroomRoom({ session, client }: Props) {
-    const [isSessionActive, setIsSessionActive] = useState(false);
-    const windowRef = useRef<Window | null>(null);
+    const [copied, setCopied] = useState(false);
 
-    const handleLaunch = () => {
-        const win = window.open(
-            client.meetingUrl,
-            `EduFlow_Meeting_${session.id}`,
-            'width=1280,height=800,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes'
-        );
-
-        windowRef.current = win;
-        setIsSessionActive(true);
-
-        const pollTimer = setInterval(() => {
-            if (win && win.closed) {
-                clearInterval(pollTimer);
-                setIsSessionActive(false);
-                windowRef.current = null;
-            }
-        }, 1000);
+    const handleCopyLink = () => {
+        navigator.clipboard.writeText(client.meetingUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
     };
 
     const handleReturn = () => {
-        if (windowRef.current && !windowRef.current.closed) {
-            windowRef.current.close();
-        }
         router.visit(client.returnUrl);
     };
 
     const handleEndSession = () => {
         if (window.confirm('Terminate this virtual session for all active participants?')) {
-            if (windowRef.current && !windowRef.current.closed) {
-                windowRef.current.close();
-            }
             router.post(`/school/online-classes/${session.id}/end`, {}, {
                 onSuccess: () => router.visit(client.returnUrl),
             });
         }
     };
 
-    return (
-        <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col antialiased">
-            <Head title={`Session: ${session.title}`} />
+    const openInNewTab = () => {
+        window.open(client.meetingUrl, '_blank');
+    };
 
-            {/* Top Navigation */}
-            <header className="h-14 shrink-0 border-b border-slate-800 bg-slate-950 px-6 flex items-center justify-between">
+    return (
+        <div className="h-screen w-screen bg-slate-950 text-slate-100 flex flex-col overflow-hidden antialiased">
+            <Head title={`Live: ${session.title}`} />
+
+            {/* Top Operational Bar */}
+            <header className="h-14 shrink-0 border-b border-slate-800 bg-slate-900 px-4 flex items-center justify-between z-10">
                 <div className="flex items-center gap-3">
                     <button
                         type="button"
                         onClick={handleReturn}
-                        className="inline-flex items-center gap-1.5 rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 hover:text-white transition"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition"
                     >
                         <ArrowLeft className="h-3.5 w-3.5" />
-                        <span>Return to Dashboard</span>
+                        <span>Dashboard</span>
                     </button>
 
                     <div className="h-4 w-px bg-slate-800" />
-                    <span className="text-xs font-semibold text-slate-300">{session.audience_label}</span>
+
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <h1 className="text-xs font-bold text-white tracking-wide truncate max-w-[200px] md:max-w-md">
+                                {session.title}
+                            </h1>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-medium">
+                            {session.school_name} &bull; {session.audience_label}
+                        </p>
+                    </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-medium px-2.5 py-1 rounded bg-emerald-950/60 border border-emerald-800">
+                <div className="flex items-center gap-2">
+                    {/* Shareable Link Button */}
+                    <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-700/60 bg-indigo-950/60 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-900/80 transition"
+                        title="Copy direct meeting link to share with parents/teachers"
+                    >
+                        {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                        <span>{copied ? 'Link Copied!' : 'Copy Share Link'}</span>
+                    </button>
+
+                    {/* Pop-out Fullscreen Tab */}
+                    <button
+                        type="button"
+                        onClick={openInNewTab}
+                        className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 hover:text-white transition"
+                        title="Open in detached full tab"
+                    >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+
+                    <div className="hidden sm:flex items-center gap-1 text-[11px] text-emerald-400 font-medium px-2.5 py-1 rounded bg-emerald-950/60 border border-emerald-800">
                         <ShieldCheck className="h-3.5 w-3.5" />
-                        <span>Verified Tenant Channel</span>
+                        <span>Encrypted</span>
                     </div>
 
                     {client.isHost && (
                         <button
                             type="button"
                             onClick={handleEndSession}
-                            className="inline-flex items-center gap-1.5 rounded bg-rose-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-800 transition"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-rose-700 hover:bg-rose-800 px-3 py-1.5 text-xs font-semibold text-white transition shadow-sm"
                         >
                             <LogOut className="h-3.5 w-3.5" />
                             <span>End Session</span>
@@ -114,87 +130,14 @@ export default function VirtualClassroomRoom({ session, client }: Props) {
                 </div>
             </header>
 
-            {/* Main Launch Card */}
-            <main className="flex-1 flex items-center justify-center p-6">
-                <div className="w-full max-w-xl bg-slate-950 border border-slate-800 rounded-xl p-8 space-y-6">
-                    
-                    <div className="space-y-2 border-b border-slate-800/80 pb-5">
-                        <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                            {session.school_name}
-                        </div>
-                        <h1 className="text-xl font-bold text-white tracking-tight">
-                            {session.title}
-                        </h1>
-                        <p className="text-xs text-slate-400">
-                            {session.description || `Organized by ${session.host_name}. Session is protected under tenant encryption.`}
-                        </p>
-                    </div>
-
-                    {/* Metadata Grid */}
-                    <div className="grid grid-cols-3 gap-3">
-                        <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                            <span className="text-[10px] font-medium text-slate-400 uppercase">Category</span>
-                            <p className="text-xs font-semibold text-white truncate mt-0.5">{session.audience_label}</p>
-                        </div>
-                        <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                            <span className="text-[10px] font-medium text-slate-400 uppercase">Organizer</span>
-                            <p className="text-xs font-semibold text-white truncate mt-0.5">{session.host_name}</p>
-                        </div>
-                        <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                            <span className="text-[10px] font-medium text-slate-400 uppercase">Duration</span>
-                            <p className="text-xs font-semibold text-slate-200 truncate mt-0.5 flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-slate-400" />
-                                <span>{session.duration_minutes} Mins</span>
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Active State vs Launch Button */}
-                    {isSessionActive ? (
-                        <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
-                            <div className="flex items-center gap-2">
-                                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-xs font-semibold text-white">Meeting window is currently running</span>
-                            </div>
-                            <p className="text-xs text-slate-400">
-                                Audio, video, and screen-sharing are active in the detached window.
-                            </p>
-                            <div className="flex gap-2 pt-1">
-                                <button
-                                    type="button"
-                                    onClick={handleLaunch}
-                                    className="px-3.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition"
-                                >
-                                    Focus Meeting Window
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleReturn}
-                                    className="px-3.5 py-1.5 rounded bg-emerald-700 hover:bg-emerald-800 text-xs font-semibold text-white transition"
-                                >
-                                    Conclude & Exit
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="space-y-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={handleLaunch}
-                                className="w-full py-3 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow transition"
-                            >
-                                <Video className="w-4 h-4" />
-                                <span>Launch Meeting Session</span>
-                                <ExternalLink className="w-3.5 h-3.5 opacity-70" />
-                            </button>
-
-                            <p className="text-[11px] text-center text-slate-500">
-                                Authenticated as <span className="text-slate-300 font-medium">{client.displayName}</span>
-                            </p>
-                        </div>
-                    )}
-
-                </div>
+            {/* In-Page Embedded Jitsi Meeting Frame */}
+            <main className="flex-1 w-full h-full bg-black relative">
+                <iframe
+                    src={client.meetingUrl}
+                    className="w-full h-full border-0"
+                    allow="camera; microphone; display-capture; autoplay; clipboard-write; fullscreen"
+                    title={session.title}
+                />
             </main>
         </div>
     );

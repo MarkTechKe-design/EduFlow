@@ -18,8 +18,9 @@ return new class extends Migration
                 $table->foreignId('teacher_id')->nullable()->constrained('users')->nullOnDelete();
                 $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
                 $table->string('title');
+                $table->string('meeting_type')->default('classroom')->index();
                 $table->text('description')->nullable();
-                $table->string('platform')->default('jitsi'); // jitsi, zoom, google_meet
+                $table->string('platform')->default('jitsi');
                 $table->string('meeting_id')->nullable()->index();
                 $table->text('meeting_url')->nullable();
                 $table->string('passcode')->nullable();
@@ -28,7 +29,7 @@ return new class extends Migration
                 $table->unsignedInteger('duration_minutes')->default(40);
                 $table->dateTime('started_at')->nullable();
                 $table->dateTime('ended_at')->nullable();
-                $table->string('status')->default('scheduled')->index(); // scheduled, live, completed, cancelled
+                $table->string('status')->default('scheduled')->index();
                 $table->timestamps();
                 $table->softDeletes();
             });
@@ -40,8 +41,11 @@ return new class extends Migration
                 if (!Schema::hasColumn('online_classes', 'created_by')) {
                     $table->foreignId('created_by')->nullable()->after('teacher_id')->constrained('users')->nullOnDelete();
                 }
+                if (!Schema::hasColumn('online_classes', 'meeting_type')) {
+                    $table->string('meeting_type')->default('classroom')->after('title');
+                }
                 if (!Schema::hasColumn('online_classes', 'description')) {
-                    $table->text('description')->nullable()->after('title');
+                    $table->text('description')->nullable()->after('meeting_type');
                 }
                 if (!Schema::hasColumn('online_classes', 'room_token')) {
                     $table->string('room_token', 64)->nullable()->unique()->after('passcode');

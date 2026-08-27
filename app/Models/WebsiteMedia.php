@@ -18,6 +18,8 @@ class WebsiteMedia extends Model
 
     protected $casts = ['metadata' => 'array'];
 
+    protected $appends = ['url'];
+
     protected static function booted(): void
     {
         static::creating(fn (self $media) => $media->public_id ??= (string) Str::uuid());

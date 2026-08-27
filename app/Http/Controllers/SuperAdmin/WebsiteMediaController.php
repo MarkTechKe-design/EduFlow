@@ -14,71 +14,98 @@ use Inertia\Response;
 
 class WebsiteMediaController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $media = WebsiteMedia::query()
-            ->latest('id')
-            ->paginate(24)
-            ->withQueryString();
+        $query = WebsiteMedia::query()->latest('id');
+
+        if ($request->filled('folder') && $request->folder !== 'all') {
+            $query->where('folder', $request->folder);
+        }
+
+        if ($request->filled('search')) {
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('file_name', 'like', "%{$search}%")
+                  ->orWhere('alt_text', 'like', "%{$search}%");
+            });
+        }
+
+        $folders = WebsiteMedia::query()
+            ->select('folder')
+            ->distinct()
+            ->whereNotNull('folder')
+            ->pluck('folder')
+            ->toArray();
 
         return Inertia::render('SuperAdmin/Website/Media/Index', [
-            'media' => $media,
+            'media'   => $query->paginate(32)->withQueryString(),
+            'folders' => array_values(array_filter($folders)),
+            'filters' => $request->only(['folder', 'search']),
         ]);
     }
 
     public function store(Request $request): JsonResponse|RedirectResponse
     {
-        try {
-            $request->validate([
-                'file'     => ['required', 'file', 'max:51200'], // Up to 50MB
-                'title'    => ['nullable', 'string', 'max:1000'],
-                'folder'   => ['nullable', 'string', 'max:100'],
-                'alt_text' => ['nullable', 'string', 'max:255'],
-            ]);
+        $request->validate([
+            'file'     => ['required', 'file', 'max:51200'], // Up to 50MB
+            'title'    => ['nullable', 'string', 'max:255'],
+            'folder'   => ['nullable', 'string', 'max:100'],
+            'alt_text' => ['nullable', 'string', 'max:255'],
+        ]);
 
-            $file = $request->file('file');
-            $extension = $file->getClientOriginalExtension();
-            $originalName = $file->getClientOriginalName();
-            $mimeType = $file->getMimeType();
-            $size = $file->getSize();
+        $file = $request->file('file');
+        $extension = $file->getClientOriginalExtension();
+        $originalName = $file->getClientOriginalName();
+        $mimeType = $file->getMimeType();
+        $size = $file->getSize();
 
-            $folder = $request->input('folder', 'website');
-            $fileName = Str::slug(Str::limit(pathinfo($originalName, PATHINFO_FILENAME), 35, '')) . '-' . Str::random(6) . '.' . $extension;
-            
-            $storagePath = $file->storeAs("media/{$folder}", $fileName, 'public');
-            $publicUrl = Storage::disk('public')->url($storagePath);
+        $folder = trim($request->input('folder', 'general'), '/');
+        $fileName = Str::slug(Str::limit(pathinfo($originalName, PATHINFO_FILENAME), 35, '')) . '-' . Str::random(6) . '.' . $extension;
 
-            // If the incoming title is a giant ugly hash string, use a clean fallback title
-            $inputTitle = $request->input('title', '');
-            $safeTitle = (strlen($inputTitle) > 80 || preg_match('/^[a-zA-Z0-9\-_]{30,}/', $inputTitle)) 
-                ? 'EduFlow Article Media Asset' 
-                : ($inputTitle ?: 'EduFlow Media Asset');
+        $storagePath = $file->storeAs("media/{$folder}", $fileName, 'public');
 
-            $media = WebsiteMedia::create([
-                'public_id'   => (string) Str::uuid(),
-                'disk'        => 'public',
-                'path'        => $storagePath,
-                'file_name'   => $fileName,
-                'mime_type'   => $mimeType,
-                'size'        => $size,
-                'folder'      => $folder,
-                'title'       => $safeTitle,
-                'alt_text'    => Str::limit($request->input('alt_text'), 255, ''),
-                'uploaded_by' => auth()->id(),
-            ]);
+        $inputTitle = $request->input('title', '');
+        $safeTitle = (strlen($inputTitle) > 80 || preg_match('/^[a-zA-Z0-9\-_]{30,}/', $inputTitle))
+            ? pathinfo($originalName, PATHINFO_FILENAME)
+            : ($inputTitle ?: pathinfo($originalName, PATHINFO_FILENAME));
 
+        $media = WebsiteMedia::create([
+            'public_id'   => (string) Str::uuid(),
+            'disk'        => 'public',
+            'path'        => $storagePath,
+            'file_name'   => $fileName,
+            'mime_type'   => $mimeType,
+            'size'        => $size,
+            'folder'      => $folder,
+            'title'       => $safeTitle,
+            'alt_text'    => Str::limit($request->input('alt_text'), 255, ''),
+            'uploaded_by' => auth()->id(),
+        ]);
+
+        if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => 'Uploaded successfully.',
-                'url'     => $publicUrl,
+                'url'     => $media->url,
                 'media'   => $media,
             ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 422);
         }
+
+        return back()->with('success', 'Media uploaded successfully.');
+    }
+
+    public function update(Request $request, WebsiteMedia $medium): RedirectResponse
+    {
+        $validated = $request->validate([
+            'title'    => ['required', 'string', 'max:255'],
+            'alt_text' => ['nullable', 'string', 'max:255'],
+            'folder'   => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $medium->update($validated);
+
+        return back()->with('success', 'Media asset updated successfully.');
     }
 
     public function destroy(WebsiteMedia $medium): RedirectResponse

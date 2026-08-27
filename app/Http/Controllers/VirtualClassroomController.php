@@ -12,9 +12,13 @@ class VirtualClassroomController extends Controller
     public function join(Request $request, OnlineClass $onlineClass): Response
     {
         $user = $request->user();
+        abort_unless($user !== null, 401);
 
-        // 1. Strict Tenant & Access Validation
-        if (!$onlineClass->canUserJoin($user)) {
+        if ((int) $onlineClass->school_id !== (int) $user->school_id) {
+            abort(404, 'Classroom session not found.');
+        }
+
+        if (! $onlineClass->canUserJoin($user)) {
             abort(403, 'Unauthorized: Access restricted to assigned participants.');
         }
 
@@ -22,34 +26,31 @@ class VirtualClassroomController extends Controller
             abort(410, 'This session has been cancelled by the organizer.');
         }
 
-        $isHost = $user->hasRole(['super-admin', 'school-admin', 'principal']) 
-            || (int)$onlineClass->teacher_id === (int)$user->id 
-            || (int)$onlineClass->created_by === (int)$user->id;
+        $isHost = $user->hasRole(['super-admin', 'school-admin', 'principal'])
+            || (int) $onlineClass->teacher_id === (int) $user->id
+            || (int) $onlineClass->created_by === (int) $user->id;
 
-        // Auto-activate session state if host joins first
         if ($isHost && $onlineClass->status === 'scheduled') {
             $onlineClass->update([
-                'status' => 'live',
+                'status'     => 'live',
                 'started_at' => now(),
             ]);
         }
 
-        // Safe relational eager load without non-existent columns
         $onlineClass->load([
             'school:id,name',
             'class:id,name',
             'section:id,name',
             'subject:id,name',
-            'teacher:id,name'
+            'teacher:id,name',
         ]);
 
-        // 2. Format User Identification
         $fullName = trim($user->name ?: ($user->email ?? 'Participant'));
         $rolePrefix = match(true) {
             $isHost => 'Host',
             $user->hasRole(['parent', 'guardian']) => 'Parent',
             $user->hasRole('student') => 'Student',
-            default => 'Participant'
+            default => 'Participant',
         };
         $displayName = "{$rolePrefix}: {$fullName}";
 
@@ -61,7 +62,6 @@ class VirtualClassroomController extends Controller
             default          => ($onlineClass->class?->name ?? 'Class') . ' Academic Session',
         };
 
-        // 3. Construct Hardened Meeting Bridge URL
         $encodedName = rawurlencode($displayName);
         $encodedSubject = rawurlencode("{$onlineClass->title} | {$audienceLabel}");
 

@@ -148,31 +148,7 @@
     @apply font-sans;
     }
 }
-/* ?? 60-120 FPS Interaction Optimization ?? */
-html {
-    scroll-behavior: smooth;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-}
 
-/* Offload hover transitions to GPU */
-a, button, [role="button"], .interactive-card {
-    will-change: transform;
-    transform: translateZ(0);
-    backface-visibility: hidden;
-}
-
-/* Ultra-fast, zero-lag micro hover response */
-.hover-lift {
-    transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 140ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-.hover-lift:hover {
-    transform: translateY(-2px);
-}
-.hover-lift:active {
-    transform: translateY(0px);
-}
-/* ?? 60-120 FPS Interaction Optimization ?? */
 html {
     scroll-behavior: smooth;
     text-rendering: optimizeLegibility;
@@ -193,4 +169,46 @@ a, button, [role="button"], .interactive-card {
 }
 .hover-lift:active {
     transform: translateY(0px);
+}
+
+/* --- EduFlow Motion Design System (Track 2) --- */
+:root {
+    --ease-tactile: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-structural: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --duration-instant: 150ms;
+    --duration-structural: 200ms;
+}
+
+.tactile-press {
+    transition: transform var(--duration-instant) var(--ease-tactile), opacity var(--duration-instant) ease;
+}
+.tactile-press:active {
+    transform: scale(0.985);
+}
+
+.app-page-enter {
+    animation: appPageFadeIn var(--duration-structural) var(--ease-structural) forwards;
+}
+
+@keyframes appPageFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    .tactile-press:active {
+        transform: none !important;
+    }
 }

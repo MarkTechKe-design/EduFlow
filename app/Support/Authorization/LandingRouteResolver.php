@@ -3,20 +3,23 @@
 namespace App\Support\Authorization;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Route;
 
-final class LandingRouteResolver
+class LandingRouteResolver
 {
     public function resolve(User $user): string
     {
-        if (RoleCatalog::isPlatform($user)) return 'super-admin.dashboard';
-        if ($user->hasRole('parent')) return 'parent.dashboard';
-        if ($user->hasRole('student')) return 'student.dashboard';
-        if ($user->hasAnyRole(['school-admin', 'principal', 'teacher', 'accountant'])) return 'school.reports.dashboard';
-        if ($user->can('library.view')) return 'school.library.books.index';
-        if ($user->can('inventory.view')) return 'school.inventory.items';
-        if ($user->can('hostel.view')) return 'school.hostel.index';
-        if ($user->can('transport.view')) return 'school.transport.routes';
-        if ($user->can('students.view')) return 'school.students.index';
+        if (method_exists($user, 'hasRole') && $user->hasRole('super-admin') && ! $user->school_id) {
+            return Route::has('super-admin.dashboard') ? 'super-admin.dashboard' : 'dashboard';
+        }
+
+        if (method_exists($user, 'hasRole') && $user->hasRole('student')) {
+            return Route::has('student.dashboard') ? 'student.dashboard' : 'dashboard';
+        }
+
+        if (method_exists($user, 'hasRole') && $user->hasRole('parent')) {
+            return Route::has('parent.dashboard') ? 'parent.dashboard' : 'dashboard';
+        }
 
         return 'dashboard';
     }

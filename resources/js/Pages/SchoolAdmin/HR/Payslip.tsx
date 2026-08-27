@@ -1,153 +1,250 @@
-import { Link } from '@inertiajs/react';
+import React from 'react';
+import { Head, Link } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Printer } from 'lucide-react';
+import type { PageProps } from '@/Types';
+import { Button } from '@/Components/ui/button';
+import { formatDate } from '@/lib/utils';
+import {
+    ArrowLeft,
+    Building2,
+    CheckCircle2,
+    CreditCard,
+    DollarSign,
+    FileText,
+    Printer,
+    ShieldCheck,
+    User
+} from 'lucide-react';
 
-interface SalaryItem { label: string; amount: number; }
-interface Payroll {
-    id: number; month_year: string; basic_salary: string; total_allowances: string;
-    total_deductions: string; net_salary: string; working_days: number; present_days: number;
-    leave_days: number; status: string; paid_on: string | null; note: string | null;
-    allowances_snapshot: SalaryItem[] | null;
-    deductions_snapshot: SalaryItem[] | null;
-    staff?: {
-        first_name: string; last_name: string | null; emp_id: string;
-        joining_date: string | null;
-        department?: { name: string };
-        designation?: { name: string };
-    };
+interface DeductionItem {
+    label: string;
+    amount: number;
+    type: 'statutory' | 'custom';
+    code?: string;
+    gross_tax?: number;
+    reliefs?: number;
 }
 
-const STATUS_STYLE: Record<string, string> = {
-    draft:     'bg-slate-100 text-slate-600',
-    generated: 'bg-blue-100 text-blue-700',
-    paid:      'bg-green-100 text-green-700',
-};
+interface AllowanceItem {
+    label: string;
+    amount: number;
+}
 
-export default function Payslip({ payroll }: { payroll: Payroll }) {
+interface Props extends PageProps {
+    payroll: {
+        id: number;
+        month_year: string;
+        basic_salary: number;
+        total_allowances: number;
+        total_deductions: number;
+        net_salary: number;
+        working_days: number;
+        present_days: number;
+        leave_days: number;
+        status: string;
+        paid_on?: string | null;
+        allowances_snapshot?: AllowanceItem[] | null;
+        deductions_snapshot?: DeductionItem[] | null;
+        staff?: {
+            id: number;
+            first_name: string;
+            last_name: string;
+            emp_id?: string | null;
+            joining_date?: string | null;
+            email?: string | null;
+            phone?: string | null;
+            department?: { name: string } | null;
+            designation?: { name: string } | null;
+        } | null;
+    };
+    school?: {
+        name: string;
+        address?: string;
+        phone?: string;
+        email?: string;
+    } | null;
+}
+
+export default function PayslipView({ auth, payroll, school }: Props) {
+    const allowances = payroll.allowances_snapshot || [];
+    const deductions = payroll.deductions_snapshot || [];
+    const grossPay = Number(payroll.basic_salary) + Number(payroll.total_allowances);
+
     return (
-        <AppLayout title={`Payslip — ${payroll.month_year}`}>
-            <style>{`
-                @media print {
-                    body * { visibility: hidden !important; }
-                    #payslip-print-area, #payslip-print-area * { visibility: visible !important; }
-                    #payslip-print-area {
-                        position: fixed !important;
-                        inset: 0 !important;
-                        width: 100% !important;
-                        padding: 24px !important;
-                        background: white !important;
-                    }
-                }
-            `}</style>
-            <div className="max-w-xl mx-auto space-y-4">
+        <AppLayout header={`Official Payslip - ${payroll.month_year}`}>
+            <Head title={`Payslip - ${payroll.staff?.first_name} ${payroll.staff?.last_name}`} />
+
+            <div className="max-w-4xl mx-auto space-y-6 pb-16">
+                {/* Screen Action Bar */}
                 <div className="flex items-center justify-between print:hidden">
-                    <div className="flex items-center gap-3">
-                        <Link href="/school/hr/payroll" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white">
-                            <ArrowLeft className="w-4 h-4" /> Payroll
-                        </Link>
-                        <span className="text-slate-300 dark:text-slate-700">|</span>
-                        <h1 className="text-xl font-bold text-slate-900 dark:text-white">Payslip</h1>
-                    </div>
-                    <Button variant="outline" onClick={() => window.print()} className="inline-flex items-center gap-2">
-                        <Printer className="w-4 h-4" /> Print
+                    <Link
+                        href="/school/hr/payroll"
+                        className="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400"
+                    >
+                        <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+                        Back to Payroll Records
+                    </Link>
+
+                    <Button
+                        onClick={() => window.print()}
+                        size="sm"
+                        className="h-8 text-xs bg-slate-900 hover:bg-slate-800 text-white font-bold"
+                    >
+                        <Printer className="w-3.5 h-3.5 mr-1.5" />
+                        Print Official Payslip
                     </Button>
                 </div>
 
-                <div id="payslip-print-area" className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                {/* Printable Payslip Card */}
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm print:border-none print:shadow-none print:p-0 space-y-6">
                     {/* Header */}
-                    <div className="bg-indigo-700 text-white px-6 py-5">
-                        <div className="flex items-start justify-between">
-                            <div>
-                                <h2 className="text-lg font-bold">Salary Payslip</h2>
-                                <p className="text-indigo-200 text-sm mt-0.5">EduFlow</p>
+                    <div className="flex flex-col sm:flex-row justify-between items-start border-b border-slate-200 dark:border-slate-800 pb-5 gap-4">
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <Building2 className="w-5 h-5 text-indigo-600" />
+                                <h1 className="text-lg font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                                    {school?.name || 'EduFlow School Management'}
+                                </h1>
                             </div>
-                            <div className="text-right">
-                                <p className="font-bold text-xl">{payroll.month_year}</p>
-                                <Badge className={`border-0 text-xs mt-1 capitalize ${STATUS_STYLE[payroll.status] ?? ''}`}>{payroll.status}</Badge>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                                {school?.address || 'Official Staff Payroll & Statutory Remittance Slip'}
+                            </p>
+                        </div>
+
+                        <div className="text-right">
+                            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Pay Period</div>
+                            <div className="text-sm font-bold font-mono text-indigo-600 dark:text-indigo-400">
+                                {payroll.month_year}
+                            </div>
+                            <div className="mt-1">
+                                {payroll.status === 'paid' ? (
+                                    <span className="inline-flex items-center text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        Disbursed ({payroll.paid_on})
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                        Processed Draft
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
 
-                    <div className="p-6 space-y-5">
-                        {/* Employee Info */}
-                        <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
-                            <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wide">Employee</p>
-                                <p className="font-semibold text-slate-900 dark:text-white mt-0.5">{payroll.staff?.first_name} {payroll.staff?.last_name}</p>
-                                <p className="text-sm text-slate-500">{payroll.staff?.emp_id}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wide">Department</p>
-                                <p className="font-medium text-slate-700 dark:text-slate-300 mt-0.5">{payroll.staff?.department?.name}</p>
-                                <p className="text-sm text-slate-500">{payroll.staff?.designation?.name}</p>
-                            </div>
-                        </div>
-
-                        {/* Attendance */}
-                        <div className="grid grid-cols-3 gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
-                            {[
-                                { label: 'Working Days', value: payroll.working_days },
-                                { label: 'Present Days', value: payroll.present_days, color: 'text-green-600' },
-                                { label: 'Leave Days',   value: payroll.leave_days,   color: 'text-amber-600' },
-                            ].map(({ label, value, color }) => (
-                                <div key={label} className="text-center bg-slate-50 dark:bg-slate-900 rounded-lg p-2">
-                                    <p className={`text-xl font-bold ${color ?? 'text-slate-900 dark:text-white'}`}>{value}</p>
-                                    <p className="text-xs text-slate-400">{label}</p>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Earnings */}
+                    {/* Employee Profile Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs">
                         <div>
-                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Earnings</p>
-                            <div className="space-y-1.5">
-                                <div className="flex justify-between text-sm">
+                            <span className="text-slate-400 block text-[11px]">Staff Name:</span>
+                            <span className="font-bold text-slate-900 dark:text-white">
+                                {payroll.staff?.first_name} {payroll.staff?.last_name}
+                            </span>
+                        </div>
+                        <div>
+                            <span className="text-slate-400 block text-[11px]">Employee ID:</span>
+                            <span className="font-mono font-bold text-slate-900 dark:text-white">
+                                {payroll.staff?.emp_id || 'N/A'}
+                            </span>
+                        </div>
+                        <div>
+                            <span className="text-slate-400 block text-[11px]">Department:</span>
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                {payroll.staff?.department?.name || 'General Staff'}
+                            </span>
+                        </div>
+                        <div>
+                            <span className="text-slate-400 block text-[11px]">Designation:</span>
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                {payroll.staff?.designation?.name || 'Educator'}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Earnings & Deductions Tables */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
+                        {/* EARNINGS */}
+                        <div className="space-y-3">
+                            <div className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300 border-b pb-1.5">
+                                Earnings Breakdown
+                            </div>
+                            <div className="space-y-2">
+                                <div className="flex justify-between py-1 border-b border-dashed border-slate-100 dark:border-slate-800">
                                     <span className="text-slate-600 dark:text-slate-400">Basic Salary</span>
-                                    <span className="font-medium text-slate-900 dark:text-white">KSh {Number(payroll.basic_salary).toLocaleString()}</span>
+                                    <span className="font-mono font-bold">
+                                        KSh {Number(payroll.basic_salary).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </span>
                                 </div>
-                                {(payroll.allowances_snapshot ?? []).map((a, i) => (
-                                    <div key={i} className="flex justify-between text-sm">
-                                        <span className="text-slate-500">{a.label}</span>
-                                        <span className="text-green-600">KSh {Number(a.amount).toLocaleString()}</span>
+                                {allowances.map((a, idx) => (
+                                    <div key={idx} className="flex justify-between py-1 border-b border-dashed border-slate-100 dark:border-slate-800">
+                                        <span className="text-slate-600 dark:text-slate-400">{a.label}</span>
+                                        <span className="font-mono font-bold">
+                                            KSh {Number(a.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </span>
                                     </div>
                                 ))}
-                                <div className="flex justify-between text-sm font-semibold border-t border-slate-100 dark:border-slate-800 pt-1">
-                                    <span className="text-slate-700 dark:text-slate-300">Gross Salary</span>
-                                    <span>KSh {(Number(payroll.basic_salary) + Number(payroll.total_allowances)).toLocaleString()}</span>
-                                </div>
+                            </div>
+                            <div className="flex justify-between pt-2 border-t font-bold text-slate-900 dark:text-white">
+                                <span>Gross Pay</span>
+                                <span className="font-mono text-indigo-600 dark:text-indigo-400">
+                                    KSh {grossPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
                             </div>
                         </div>
 
-                        {/* Deductions */}
-                        {(payroll.deductions_snapshot ?? []).length > 0 && (
-                            <div>
-                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Deductions</p>
-                                <div className="space-y-1.5">
-                                    {(payroll.deductions_snapshot ?? []).map((d, i) => (
-                                        <div key={i} className="flex justify-between text-sm">
-                                            <span className="text-slate-500">{d.label}</span>
-                                            <span className="text-red-600">- KSh {Number(d.amount).toLocaleString()}</span>
+                        {/* DEDUCTIONS */}
+                        <div className="space-y-3">
+                            <div className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300 border-b pb-1.5">
+                                Statutory & Voluntary Deductions
+                            </div>
+                            <div className="space-y-2">
+                                {deductions.map((d, idx) => (
+                                    <div key={idx} className="flex justify-between py-1 border-b border-dashed border-slate-100 dark:border-slate-800">
+                                        <div>
+                                            <span className="text-slate-600 dark:text-slate-400">{d.label}</span>
+                                            {d.code === 'PAYE' && d.reliefs && (
+                                                <span className="block text-[10px] text-emerald-600 font-mono">
+                                                    Reliefs Applied: -KSh {Number(d.reliefs).toFixed(2)}
+                                                </span>
+                                            )}
                                         </div>
-                                    ))}
-                                </div>
+                                        <span className="font-mono font-bold text-rose-600">
+                                            -KSh {Number(d.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
-                        )}
-
-                        {/* Net Salary */}
-                        <div className="rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3 flex justify-between items-center">
-                            <span className="font-semibold text-indigo-900 dark:text-indigo-200">Net Salary</span>
-                            <span className="text-2xl font-bold text-indigo-600">KSh {Number(payroll.net_salary).toLocaleString()}</span>
+                            <div className="flex justify-between pt-2 border-t font-bold text-slate-900 dark:text-white">
+                                <span>Total Deductions</span>
+                                <span className="font-mono text-rose-600">
+                                    -KSh {Number(payroll.total_deductions).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                            </div>
                         </div>
+                    </div>
 
-                        {payroll.paid_on && (
-                            <p className="text-sm text-green-600 text-center">Paid on {new Date(payroll.paid_on).toLocaleDateString()}</p>
-                        )}
+                    {/* Net Pay Total Banner */}
+                    <div className="p-4 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 flex justify-between items-center">
+                        <div>
+                            <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 block">
+                                Net Remittance / Take-Home Pay
+                            </span>
+                            <span className="text-[11px] text-slate-500">
+                                Deposited to official registered employee bank account.
+                            </span>
+                        </div>
+                        <div className="text-2xl font-bold font-mono text-indigo-700 dark:text-indigo-300">
+                            KSh {Number(payroll.net_salary).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </div>
+                    </div>
 
-                        {payroll.note && (
-                            <p className="text-xs text-slate-400 text-center">{payroll.note}</p>
-                        )}
+                    {/* Footer Authorization */}
+                    <div className="pt-8 border-t border-slate-200 dark:border-slate-800 grid grid-cols-2 gap-8 text-[11px] text-slate-500">
+                        <div>
+                            <div className="border-b border-slate-400 w-48 mb-1"></div>
+                            <span>Prepared By (Bursar / Accountant)</span>
+                        </div>
+                        <div className="text-right">
+                            <div className="border-b border-slate-400 w-48 ml-auto mb-1"></div>
+                            <span>Authorized By (Principal / Director)</span>
+                        </div>
                     </div>
                 </div>
             </div>

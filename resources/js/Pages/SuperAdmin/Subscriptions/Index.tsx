@@ -153,8 +153,8 @@ export default function SubscriptionsIndex({ subscriptions, schools, packages, c
                                     )}
                                     {subscriptions.data.map(s => (
                                         <tr key={s.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                            <td className="py-3 px-4 font-medium">{s.school.name}</td>
-                                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{s.package.name}</td>
+                                            <td className="py-3 px-4 font-medium">{s.school?.name ?? "Unassigned School"}</td>
+                                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{s.package?.name ?? "Custom Plan"}</td>
                                             <td className="py-3 px-4 text-slate-500 text-xs">
                                                 {new Date(s.start_date).toLocaleDateString()} → {new Date(s.end_date).toLocaleDateString()}
                                             </td>
@@ -162,7 +162,7 @@ export default function SubscriptionsIndex({ subscriptions, schools, packages, c
                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${STATUS_COLORS[s.status] ?? ''}`}>{s.status}</span>
                                                 {s.is_trial && <span className="ml-1 text-xs text-blue-500">(trial)</span>}
                                             </td>
-                                            <td className="py-3 px-4">${s.amount_paid}</td>
+                                            <td className="py-3 px-4">KSh {s.amount_paid}</td>
                                             <td className="py-3 px-4">
                                                 <div className="flex items-center justify-end gap-1">
                                                     <button onClick={() => openEdit(s)} className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-indigo-600">
@@ -252,7 +252,7 @@ export default function SubscriptionsIndex({ subscriptions, schools, packages, c
                                     <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="_none">None</SelectItem>
-                                        {coupons.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.code} ({c.type === 'percent' ? `${c.value}%` : `$${c.value}`})</SelectItem>)}
+                                        {coupons.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.code} ({c.type === 'percent' ? `KSh {c.value}%` : `KSh ${c.value}`})</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>

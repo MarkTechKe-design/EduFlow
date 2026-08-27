@@ -24,5 +24,5 @@ export default function SafeHtml({ html, className = '', as: Component = 'div' }
 
     if (!cleanHtml) return null;
 
-    return <Component className={className} dangerouslySetInnerHTML={{ __html: cleanHtml }} />;
+    return <Component className={className}>{cleanHtml.replace(/<[^>]*>/g, '')}</Component>;
 }

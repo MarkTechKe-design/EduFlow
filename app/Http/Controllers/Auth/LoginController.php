@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\PlatformSetting;
 use App\Models\User;
+use App\Services\WebsiteContentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -16,33 +19,32 @@ use Inertia\Response;
 
 class LoginController extends Controller
 {
-            public function create(Request $request): Response
+    public function create(Request $request): Response
     {
-        // Force session termination on entering login screen
         if (Auth::check()) {
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
         }
 
-        $bg = \App\Models\PlatformSetting::get('login_background');
-        $noticeEnabled = \App\Models\PlatformSetting::get('login_notice_enabled');
-        $branding = app(\App\Services\WebsiteContentService::class)->branding();
+        $bg = PlatformSetting::get('login_background');
+        $noticeEnabled = PlatformSetting::get('login_notice_enabled');
+        $branding = app(WebsiteContentService::class)->branding();
 
         return Inertia::render('Auth/Login', [
             'status' => session('status'),
-            'canResetPassword' => \Illuminate\Support\Facades\Route::has('password.request'),
+            'canResetPassword' => Route::has('password.request'),
             'branding' => [
-                'name' => $branding['name'] ?? config('app.name', 'EduFlow'),
+                'name'          => $branding['name'] ?? config('app.name', 'EduFlow'),
                 'support_phone' => $branding['support_phone'] ?? '+254 718 178521',
                 'support_email' => $branding['support_email'] ?? 'support@eduflow.co.ke',
             ],
             'visualConfig' => [
-                'imageUrl' => filled($bg) ? asset('storage/' . $bg) : null,
-                'title' => (string) \App\Models\PlatformSetting::get('login_title', 'Empowering Kenyan schools to educate, empower, and excel.'),
-                'subtitle' => (string) \App\Models\PlatformSetting::get('login_subtitle', 'All-in-one school operations platform with secure multi-tenant isolation, role-based access, and real-time insights.'),
-                'notificationText' => (string) \App\Models\PlatformSetting::get('login_notice_text', 'Grade 7 CBC Assessment Rubrics Approved'),
-                'notificationSubtext' => (string) \App\Models\PlatformSetting::get('login_notice_subtext', 'Term 2 continuous evaluation scores validated for 12 learning areas.'),
+                'imageUrl'            => filled($bg) ? asset('storage/' . $bg) : null,
+                'title'               => (string) PlatformSetting::get('login_title', 'Empowering Kenyan schools to educate, empower, and excel.'),
+                'subtitle'            => (string) PlatformSetting::get('login_subtitle', 'All-in-one school operations platform with secure multi-tenant isolation, role-based access, and real-time insights.'),
+                'notificationText'    => (string) PlatformSetting::get('login_notice_text', 'Grade 7 CBC Assessment Rubrics Approved'),
+                'notificationSubtext' => (string) PlatformSetting::get('login_notice_subtext', 'Term 2 continuous evaluation scores validated for 12 learning areas.'),
                 'notificationEnabled' => is_null($noticeEnabled) ? true : filter_var($noticeEnabled, FILTER_VALIDATE_BOOLEAN),
             ],
         ]);
@@ -72,7 +74,6 @@ class LoginController extends Controller
         }
 
         Auth::login($user, $remember);
-
         $request->session()->regenerate();
 
         $updateData = ['last_login_at' => now()];
@@ -103,7 +104,6 @@ class LoginController extends Controller
     public function destroy(Request $request): RedirectResponse
     {
         Auth::guard('web')->logout();
-
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 

@@ -33,13 +33,7 @@ export default function HeroSection({ body }: Props) {
 
                     {/* High-Contrast Conversion Triggers */}
                     <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3.5">
-                        <Link
-                            href="/register"
-                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-sm font-bold shadow-lg shadow-emerald-600/25 transition-all"
-                        >
-                            <span>Setup My School</span>
-                            <ArrowRight className="w-4 h-4" />
-                        </Link>
+                        <a href="/register-school" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all cursor-pointer">Setup My School &rsaquo;</a>
 
                         <Link
                             href="/contact"

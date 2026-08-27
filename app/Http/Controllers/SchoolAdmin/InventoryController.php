@@ -3,321 +3,345 @@
 namespace App\Http\Controllers\SchoolAdmin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Asset;
+use App\Models\Department;
 use App\Models\InventoryCategory;
-use App\Models\InventoryItem;
 use App\Models\InventoryIssue;
+use App\Models\InventoryItem;
 use App\Models\InventoryPurchase;
 use App\Models\Staff;
+use App\Models\Student;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Inertia\Response;
 
 class InventoryController extends Controller
 {
-    // ── Categories ────────────────────────────────────────────────
+    
 
-    public function categories()
+    public function index(Request $request): Response
     {
-        $this->authorize('viewAny', InventoryCategory::class);
-
         $sid = $this->getSchoolId();
-
-        return Inertia::render('SchoolAdmin/Inventory/Categories', [
-            'categories' => InventoryCategory::where('school_id', $sid)
-                ->withCount('items')
-                ->orderBy('name')
-                ->get(),
-        ]);
-    }
-
-    public function storeCategory(Request $request)
-    {
-        $this->authorize('create', InventoryCategory::class);
-
-        $data = $request->validate([
-            'name'        => 'required|string|max:100',
-            'description' => 'nullable|string|max:255',
-        ]);
-
-        InventoryCategory::create(array_merge($data, ['school_id' => $this->getSchoolId()]));
-
-        return back()->with('success', 'Category created.');
-    }
-
-    public function updateCategory(Request $request, InventoryCategory $inventoryCategory)
-    {
-        $this->authorize('update', $inventoryCategory);
-
-        $data = $request->validate([
-            'name'        => 'required|string|max:100',
-            'description' => 'nullable|string|max:255',
-        ]);
-
-        $inventoryCategory->update($data);
-        return back()->with('success', 'Category updated.');
-    }
-
-    public function destroyCategory(InventoryCategory $inventoryCategory)
-    {
-        $this->authorize('delete', $inventoryCategory);
-
-        $inventoryCategory->delete();
-        return back()->with('success', 'Category deleted.');
-    }
-
-    // ── Items ─────────────────────────────────────────────────────
-
-    public function items(Request $request)
-    {
-        $this->authorize('viewAny', InventoryItem::class);
-
-        $sid = $this->getSchoolId();
-        $this->assertOptionalCategoryOwnership($request->category_id, $sid);
 
         $items = InventoryItem::with('category:id,name')
             ->where('school_id', $sid)
-            ->when($request->category_id, fn ($q) => $q->where('category_id', $request->category_id))
-            ->when($request->search, fn ($q) => $q->where('name', 'like', "%{$request->search}%"))
-            ->when($request->low_stock === 'yes', fn ($q) => $q->whereColumn('current_stock', '<=', 'minimum_stock'))
+            ->when($request->search, fn ($q, $s) => $q->where('name', 'like', "%{$s}%"))
+            ->when($request->category_id && $request->category_id !== 'all', fn ($q) => $q->where('category_id', $request->category_id))
             ->orderBy('name')
-            ->paginate(25)
+            ->paginate(15, ['*'], 'items_page')
             ->withQueryString();
-
-        $stats = [
-            'total_items'     => InventoryItem::where('school_id', $sid)->count(),
-            'low_stock_count' => InventoryItem::where('school_id', $sid)
-                ->whereColumn('current_stock', '<=', 'minimum_stock')->count(),
-            'total_value'     => 0, // calculated from purchases
-        ];
-
-        return Inertia::render('SchoolAdmin/Inventory/Items', [
-            'items'      => $items,
-            'categories' => InventoryCategory::where('school_id', $sid)->orderBy('name')->get(['id', 'name']),
-            'filters'    => $request->only('category_id', 'search', 'low_stock'),
-            'stats'      => $stats,
-        ]);
-    }
-
-    public function storeItem(Request $request)
-    {
-        $data = $request->validate([
-            'category_id'   => 'required|integer',
-            'name'          => 'required|string|max:200',
-            'unit'          => 'required|string|max:30',
-            'minimum_stock' => 'required|numeric|min:0',
-            'description'   => 'nullable|string',
-        ]);
-
-        $sid = $this->getSchoolId();
-        $this->assertCategoryOwnership((int) $data['category_id'], $sid);
-        $this->authorize('create', InventoryItem::class);
-
-        InventoryItem::create(array_merge($data, ['school_id' => $sid]));
-
-        return back()->with('success', 'Item added.');
-    }
-
-    public function updateItem(Request $request, InventoryItem $inventoryItem)
-    {
-        $data = $request->validate([
-            'category_id'   => 'required|integer',
-            'name'          => 'required|string|max:200',
-            'unit'          => 'required|string|max:30',
-            'minimum_stock' => 'required|numeric|min:0',
-            'description'   => 'nullable|string',
-            'is_active'     => 'boolean',
-        ]);
-
-        $sid = $this->getSchoolId();
-        $this->assertCategoryOwnership((int) $data['category_id'], $sid);
-        $this->authorize('update', $inventoryItem);
-
-        $inventoryItem->update($data);
-        return back()->with('success', 'Item updated.');
-    }
-
-    public function destroyItem(InventoryItem $inventoryItem)
-    {
-        $this->authorize('delete', $inventoryItem);
-
-        $inventoryItem->delete();
-        return back()->with('success', 'Item deleted.');
-    }
-
-    // ── Purchases ─────────────────────────────────────────────────
-
-    public function purchases(Request $request)
-    {
-        $this->authorize('viewAny', InventoryPurchase::class);
-
-        $sid = $this->getSchoolId();
-        $this->assertOptionalItemOwnership($request->item_id, $sid);
-
-        $purchases = InventoryPurchase::with('item:id,name,unit')
-            ->where('school_id', $sid)
-            ->when($request->item_id, fn ($q) => $q->where('item_id', $request->item_id))
-            ->latest('purchase_date')
-            ->paginate(25)
-            ->withQueryString();
-
-        return Inertia::render('SchoolAdmin/Inventory/Purchases', [
-            'purchases' => $purchases,
-            'items'     => InventoryItem::where('school_id', $sid)->where('is_active', true)
-                ->orderBy('name')->get(['id', 'name', 'unit']),
-            'filters'   => $request->only('item_id'),
-        ]);
-    }
-
-    public function storePurchase(Request $request)
-    {
-        $data = $request->validate([
-            'item_id'       => 'required|integer',
-            'vendor'        => 'nullable|string|max:200',
-            'purchase_date' => 'required|date',
-            'quantity'      => 'required|numeric|min:0.01',
-            'unit_price'    => 'required|numeric|min:0',
-            'invoice_no'    => 'nullable|string|max:100',
-            'notes'         => 'nullable|string',
-        ]);
-
-        $sid = $this->getSchoolId();
-        $this->assertItemOwnership((int) $data['item_id'], $sid);
-        $this->authorize('create', InventoryPurchase::class);
-
-        $data['total_price'] = round((float)$data['quantity'] * (float)$data['unit_price'], 2);
-        $data['school_id']   = $sid;
-
-        DB::transaction(function () use ($data) {
-            InventoryPurchase::create($data);
-            InventoryItem::where('id', $data['item_id'])
-                ->increment('current_stock', (float)$data['quantity']);
-        });
-
-        return back()->with('success', 'Purchase recorded and stock updated.');
-    }
-
-    // ── Issues ────────────────────────────────────────────────────
-
-    public function issues(Request $request)
-    {
-        $this->authorize('viewAny', InventoryIssue::class);
-
-        $sid = $this->getSchoolId();
 
         $issues = InventoryIssue::with('item:id,name,unit')
             ->where('school_id', $sid)
-            ->when($request->status, fn ($q) => $q->where('status', $request->status))
+            ->when($request->issue_status && $request->issue_status !== 'all', fn ($q) => $q->where('status', $request->issue_status))
             ->latest('issue_date')
-            ->paginate(25)
+            ->paginate(15, ['*'], 'issues_page')
             ->withQueryString();
 
-        return Inertia::render('SchoolAdmin/Inventory/Issues', [
-            'issues'    => $issues,
-            'items'     => InventoryItem::where('school_id', $sid)->where('is_active', true)
-                ->where('current_stock', '>', 0)->orderBy('name')->get(['id', 'name', 'unit', 'current_stock']),
-            'staffList' => Staff::where('school_id', $sid)->where('status', 'active')
-                ->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'emp_id']),
-            'filters'   => $request->only('status'),
+        $purchases = InventoryPurchase::with('item:id,name,unit')
+            ->where('school_id', $sid)
+            ->latest('purchase_date')
+            ->paginate(15, ['*'], 'purchases_page')
+            ->withQueryString();
+
+        $assets = Asset::where('school_id', $sid)
+            ->when($request->asset_search, function ($q, $s) {
+                $q->where('name', 'like', "%{$s}%")
+                  ->orWhere('asset_code', 'like', "%{$s}%")
+                  ->orWhere('location', 'like', "%{$s}%");
+            })
+            ->when($request->asset_status && $request->asset_status !== 'all', fn ($q) => $q->where('status', $request->asset_status))
+            ->orderBy('name')
+            ->paginate(15, ['*'], 'assets_page')
+            ->withQueryString();
+
+        $categories = InventoryCategory::where('school_id', $sid)->orderBy('name')->get(['id', 'name']);
+        $departments = Department::where('school_id', $sid)->orderBy('name')->get(['id', 'name', 'code']);
+        $staffList = Staff::where('school_id', $sid)->where('status', 'active')->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'emp_id']);
+        $allItems = InventoryItem::where('school_id', $sid)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'unit', 'current_stock', 'minimum_stock']);
+
+        $totalItems = InventoryItem::where('school_id', $sid)->count();
+        $lowStockCount = InventoryItem::where('school_id', $sid)->whereColumn('current_stock', '<=', 'minimum_stock')->count();
+        $totalAssetCost = Asset::where('school_id', $sid)->sum('purchase_price');
+        $totalAssetValuation = Asset::where('school_id', $sid)->sum('current_value');
+        $activeIssuesCount = InventoryIssue::where('school_id', $sid)->where('status', 'issued')->count();
+
+        $stats = [
+            'total_items'         => $totalItems,
+            'low_stock_count'     => $lowStockCount,
+            'total_asset_cost'    => (float) $totalAssetCost,
+            'total_asset_value'   => (float) $totalAssetValuation,
+            'active_store_issues' => $activeIssuesCount,
+        ];
+
+        return Inertia::render('SchoolAdmin/Inventory/Index', [
+            'items'       => $items,
+            'issues'      => $issues,
+            'purchases'   => $purchases,
+            'assets'      => $assets,
+            'categories'  => $categories,
+            'departments' => $departments,
+            'staffList'   => $staffList,
+            'allItems'    => $allItems,
+            'stats'       => $stats,
+            'filters'     => $request->only('search', 'category_id', 'issue_status', 'asset_search', 'asset_status'),
         ]);
     }
 
-    public function storeIssue(Request $request)
+    public function categories(Request $request): Response
     {
-        $data = $request->validate([
+        return $this->index($request);
+    }
+
+    public function items(Request $request): Response
+    {
+        return $this->index($request);
+    }
+
+    public function purchases(Request $request): Response
+    {
+        return $this->index($request);
+    }
+
+    public function issues(Request $request): Response
+    {
+        return $this->index($request);
+    }
+
+    public function assets(Request $request): Response
+    {
+        return $this->index($request);
+    }
+
+    public function showAsset(Asset $asset): Response
+    {
+        $sid = $this->getSchoolId();
+        abort_unless((int) $asset->school_id === $sid, 404);
+
+        return Inertia::render('SchoolAdmin/Inventory/AssetDetail', [
+            'asset' => $asset,
+        ]);
+    }
+
+    public function storeCategory(Request $request): RedirectResponse
+    {
+        $sid = $this->getSchoolId();
+
+        $validated = $request->validate([
+            'name'        => 'required|string|max:100',
+            'description' => 'nullable|string|max:255',
+        ]);
+
+        $validated['school_id'] = $sid;
+        InventoryCategory::create($validated);
+
+        return redirect()->route('school.inventory.categories')
+            ->with('success', 'Category created successfully.');
+    }
+
+    public function destroyCategory(InventoryCategory $inventoryCategory): RedirectResponse
+    {
+        $sid = $this->getSchoolId();
+        abort_unless((int) $inventoryCategory->school_id === $sid, 404);
+
+        $inventoryCategory->delete();
+
+        return redirect()->route('school.inventory.categories')
+            ->with('success', 'Category deleted.');
+    }
+
+    public function storeItem(Request $request): RedirectResponse
+    {
+        $sid = $this->getSchoolId();
+
+        $validated = $request->validate([
+            'category_id'   => 'required|integer',
+            'name'          => 'required|string|max:255',
+            'unit'          => 'required|string|max:50',
+            'minimum_stock' => 'required|numeric|min:0',
+            'description'   => 'nullable|string',
+        ]);
+
+        InventoryCategory::where('school_id', $sid)->findOrFail($validated['category_id']);
+
+        $validated['school_id'] = $sid;
+        $validated['current_stock'] = 0;
+        $validated['is_active'] = true;
+
+        InventoryItem::create($validated);
+
+        return redirect()->route('school.inventory.items')
+            ->with('success', 'Item registered successfully.');
+    }
+
+    public function updateItem(Request $request, InventoryItem $inventoryItem): RedirectResponse
+    {
+        $sid = $this->getSchoolId();
+        abort_unless((int) $inventoryItem->school_id === $sid, 404);
+
+        $validated = $request->validate([
+            'name'          => 'required|string|max:255',
+            'unit'          => 'required|string|max:50',
+            'minimum_stock' => 'required|numeric|min:0',
+        ]);
+
+        $inventoryItem->update($validated);
+
+        return redirect()->route('school.inventory.items')
+            ->with('success', 'Item updated.');
+    }
+
+    public function destroyItem(InventoryItem $inventoryItem): RedirectResponse
+    {
+        $sid = $this->getSchoolId();
+        abort_unless((int) $inventoryItem->school_id === $sid, 404);
+
+        $inventoryItem->delete();
+
+        return redirect()->route('school.inventory.items')
+            ->with('success', 'Item deleted.');
+    }
+
+    public function storePurchase(Request $request): RedirectResponse
+    {
+        $sid = $this->getSchoolId();
+
+        $validated = $request->validate([
+            'item_id'       => 'required|integer',
+            'purchase_date' => 'required|date',
+            'quantity'      => 'required|numeric|min:0.01',
+            'unit_price'    => 'required|numeric|min:0',
+            'supplier_name' => 'nullable|string|max:255',
+            'invoice_no'    => 'nullable|string|max:100',
+        ]);
+
+        $item = InventoryItem::where('school_id', $sid)->findOrFail($validated['item_id']);
+
+        $validated['school_id'] = $sid;
+        $validated['total_price'] = (float) $validated['quantity'] * (float) $validated['unit_price'];
+
+        InventoryPurchase::create($validated);
+        $item->increment('current_stock', (float) $validated['quantity']);
+
+        return redirect()->route('school.inventory.purchases')
+            ->with('success', 'Stock purchase recorded.');
+    }
+
+    public function storeIssue(Request $request): RedirectResponse
+    {
+        $sid = $this->getSchoolId();
+
+        $validated = $request->validate([
             'item_id'        => 'required|integer',
-            'issued_to_type' => 'required|in:staff,department',
-            'issued_to_id'   => 'required|integer',
-            'issued_to_name' => 'required|string|max:200',
+            'issued_to_type' => 'required|string',
+            'issued_to_id'   => 'nullable|integer',
+            'issued_to_name' => 'nullable|string|max:255',
             'quantity'       => 'required|numeric|min:0.01',
             'issue_date'     => 'required|date',
-            'purpose'        => 'nullable|string|max:255',
-            'notes'          => 'nullable|string',
+            'remarks'        => 'nullable|string',
         ]);
 
+        $item = InventoryItem::where('school_id', $sid)->findOrFail($validated['item_id']);
+
+        if (!empty($validated['issued_to_id'])) {
+            if ($validated['issued_to_type'] === 'staff') {
+                Staff::where('school_id', $sid)->findOrFail($validated['issued_to_id']);
+            } elseif ($validated['issued_to_type'] === 'student') {
+                Student::where('school_id', $sid)->findOrFail($validated['issued_to_id']);
+            }
+        }
+
+        $validated['school_id'] = $sid;
+        $validated['status'] = 'issued';
+
+        InventoryIssue::create($validated);
+        $item->decrement('current_stock', (float) $validated['quantity']);
+
+        return redirect()->route('school.inventory.issues')
+            ->with('success', 'Item issued successfully.');
+    }
+
+    public function returnIssue(Request $request, InventoryIssue $inventoryIssue): RedirectResponse
+    {
         $sid = $this->getSchoolId();
-        $this->assertItemOwnership((int) $data['item_id'], $sid);
-        $this->assertIssuedToOwnership($data['issued_to_type'], (int) $data['issued_to_id'], $sid);
-        $this->authorize('issue', InventoryIssue::class);
-        $item = InventoryItem::query()
-            ->whereKey($data['item_id'])
-            ->where('school_id', $sid)
-            ->firstOrFail();
+        abort_unless((int) $inventoryIssue->school_id === $sid, 404);
 
-        if ((float)$item->current_stock < (float)$data['quantity']) {
-            return back()->withErrors(['quantity' => 'Insufficient stock. Available: ' . $item->current_stock . ' ' . $item->unit]);
-        }
+        $returnedQty = (float) $request->input('returned_quantity', $inventoryIssue->quantity);
+        $returnDate = $request->input('return_date', now()->toDateString());
 
-        $data['school_id'] = $this->getSchoolId();
-        $data['status']    = 'issued';
-
-        DB::transaction(function () use ($data, $item) {
-            InventoryIssue::create($data);
-            $item->decrement('current_stock', (float)$data['quantity']);
-        });
-
-        return back()->with('success', 'Item issued successfully.');
-    }
-
-    public function returnIssue(Request $request, InventoryIssue $inventoryIssue)
-    {
-        $this->authorize('return', $inventoryIssue);
-
-        $data = $request->validate([
-            'return_date'      => 'required|date',
-            'returned_quantity'=> 'required|numeric|min:0.01',
+        $inventoryIssue->update([
+            'status'            => 'returned',
+            'return_date'       => $returnDate,
+            'returned_quantity' => $returnedQty,
         ]);
 
-        $returnedQty = (float)$data['returned_quantity'];
-        $issuedQty   = (float)$inventoryIssue->quantity;
-
-        DB::transaction(function () use ($inventoryIssue, $data, $returnedQty, $issuedQty) {
-            $newStatus = $returnedQty >= $issuedQty ? 'returned' : 'partial';
-            $inventoryIssue->update([
-                'return_date' => $data['return_date'],
-                'status'      => $newStatus,
-            ]);
-            $inventoryIssue->item->increment('current_stock', min($returnedQty, $issuedQty));
-        });
-
-        return back()->with('success', 'Item return recorded.');
-    }
-    private function assertOptionalCategoryOwnership($categoryId, int $schoolId): void
-    {
-        if ($categoryId !== null) {
-            $this->assertCategoryOwnership((int) $categoryId, $schoolId);
+        if ($inventoryIssue->item) {
+            $inventoryIssue->item->increment('current_stock', $returnedQty);
         }
+
+        return redirect()->route('school.inventory.issues')
+            ->with('success', 'Issue marked as returned.');
     }
 
-    private function assertOptionalItemOwnership($itemId, int $schoolId): void
+    public function storeAsset(Request $request): RedirectResponse
     {
-        if ($itemId !== null) {
-            $this->assertItemOwnership((int) $itemId, $schoolId);
-        }
+        $sid = $this->getSchoolId();
+
+        $validated = $request->validate([
+            'name'           => 'required|string|max:255',
+            'category'       => 'required|string|max:100',
+            'purchase_price' => 'required|numeric|min:0',
+            'current_value'  => 'required|numeric|min:0',
+        ]);
+
+        $validated['school_id'] = $sid;
+        $validated['status'] = 'active';
+
+        Asset::create($validated);
+
+        return redirect()->route('school.inventory.assets')
+            ->with('success', 'Asset recorded successfully.');
     }
 
-    private function assertCategoryOwnership(int $categoryId, int $schoolId): void
+    public function updateAsset(Request $request, Asset $asset): RedirectResponse
     {
-        abort_unless(
-            InventoryCategory::query()->whereKey($categoryId)->where('school_id', $schoolId)->exists(),
-            404
-        );
+        $sid = $this->getSchoolId();
+        abort_unless((int) $asset->school_id === $sid, 404);
+
+        $validated = $request->validate([
+            'name'          => 'required|string|max:255',
+            'current_value' => 'required|numeric|min:0',
+        ]);
+
+        $asset->update($validated);
+
+        return redirect()->route('school.inventory.assets')
+            ->with('success', 'Asset updated.');
     }
 
-    private function assertItemOwnership(int $itemId, int $schoolId): void
+    public function destroyAsset(Asset $asset): RedirectResponse
     {
-        abort_unless(
-            InventoryItem::query()->whereKey($itemId)->where('school_id', $schoolId)->exists(),
-            404
-        );
+        $sid = $this->getSchoolId();
+        abort_unless((int) $asset->school_id === $sid, 404);
+
+        $asset->delete();
+
+        return redirect()->route('school.inventory.assets')
+            ->with('success', 'Asset deleted.');
     }
 
-    private function assertIssuedToOwnership(string $type, int $recordId, int $schoolId): void
+    public function storeAssetMaintenance(Request $request, Asset $asset): RedirectResponse
     {
-        $modelClass = $type === 'staff' ? Staff::class : \App\Models\Department::class;
+        $sid = $this->getSchoolId();
+        abort_unless((int) $asset->school_id === $sid, 404);
 
-        abort_unless(
-            $modelClass::query()->whereKey($recordId)->where('school_id', $schoolId)->exists(),
-            404
-        );
+        $request->validate([
+            'date'        => 'required|date',
+            'description' => 'required|string|max:500',
+        ]);
+
+        return redirect()->route('school.inventory.assets')
+            ->with('success', 'Maintenance record created.');
     }
 }

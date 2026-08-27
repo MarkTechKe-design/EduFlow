@@ -263,7 +263,7 @@ class StudentController extends Controller
         ]);
 
         $file = $request->file('document');
-        $filePath = $file->store("schools/{$schoolId}/students/{$student->id}/documents", 'local');
+        $filePath = $file->store("schools/{$schoolId}/students/{$student->id}/documents", 'private');
 
         StudentDocument::create([
             'school_id'     => $schoolId,
@@ -287,11 +287,11 @@ class StudentController extends Controller
             abort(403);
         }
 
-        if (!Storage::disk('local')->exists($document->file_path)) {
+        if (!Storage::disk('private')->exists($document->file_path)) {
             abort(404, 'Document file not found.');
         }
 
-        return Storage::disk('local')->download($document->file_path, $document->file_name);
+        return Storage::disk('private')->download($document->file_path, $document->file_name);
     }
 
     public function deleteDocument(Student $student, StudentDocument $document): RedirectResponse
@@ -301,7 +301,7 @@ class StudentController extends Controller
             abort(403);
         }
 
-        Storage::disk('local')->delete($document->file_path);
+        Storage::disk('private')->delete($document->file_path);
         $document->delete();
 
         return back()->with('success', 'Document deleted.');

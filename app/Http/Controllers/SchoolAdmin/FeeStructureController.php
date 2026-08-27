@@ -3,115 +3,141 @@
 namespace App\Http\Controllers\SchoolAdmin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicYear;
 use App\Models\FeeCategory;
 use App\Models\FeeStructure;
+use App\Models\FeeVoteHead;
 use App\Models\SchoolClass;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
+use Inertia\Response;
 
 class FeeStructureController extends Controller
 {
-    public function __construct()
-    {
-        $this->authorizeResource(FeeStructure::class, 'feeStructure');
-    }
-
-    public function index(Request $request)
+    public function index(Request $request): Response
     {
         $sid = $this->getSchoolId();
-        $this->assertFilterOwnership($request, $sid);
 
-        $structures = FeeStructure::with(['schoolClass:id,name', 'feeCategory:id,name,type'])
-            ->when($request->class_id, fn ($q) => $q->where('class_id', $request->class_id))
-            ->when($request->category_id, fn ($q) => $q->where('fee_category_id', $request->category_id))
-            ->when($request->academic_year, fn ($q) => $q->where('academic_year', $request->academic_year))
-            ->orderBy('academic_year', 'desc')
-            ->orderByRaw('(SELECT numeric_name FROM classes WHERE classes.id = fee_structures.class_id) ASC')
-            ->paginate(25)
+        $structures = FeeStructure::with(['schoolClass:id,name', 'category:id,name', 'items.voteHead'])
+            ->where('school_id', $sid)
+            ->when($request->class_id, fn ($q, $c) => $q->where('class_id', $c))
+            ->when($request->fee_category_id, fn ($q, $cat) => $q->where('fee_category_id', $cat))
+            ->when($request->term, fn ($q, $t) => $q->where('term', $t))
+            ->when($request->academic_year, fn ($q, $y) => $q->where('academic_year', $y))
+            ->latest()
+            ->paginate(20)
             ->withQueryString();
 
+        $classes = SchoolClass::where('school_id', $sid)->orderBy('numeric_name')->get(['id', 'name']);
+        $categories = FeeCategory::where('school_id', $sid)->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        
+        $academicYears = Schema::hasTable('academic_years')
+            ? AcademicYear::where('school_id', $sid)->orderByDesc('id')->get(['id', 'name'])
+            : collect([['id' => 1, 'name' => '2026']]);
+
+        $voteHeads = Schema::hasTable('fee_vote_heads')
+            ? FeeVoteHead::where('school_id', $sid)->where('is_active', true)->get(['id', 'name', 'code'])
+            : collect();
+
         return Inertia::render('SchoolAdmin/Fees/Structures', [
-            'structures' => $structures,
-            'classes' => SchoolClass::where('school_id', $sid)->orderBy('numeric_name')->get(['id', 'name']),
-            'categories' => FeeCategory::where('school_id', $sid)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'type']),
-            'filters' => $request->only('class_id', 'category_id', 'academic_year'),
-            'currentYear' => '2025-2026',
+            'structures'    => $structures,
+            'classes'       => $classes,
+            'categories'    => $categories,
+            'academicYears' => $academicYears,
+            'voteHeads'     => $voteHeads,
+            'filters'       => $request->only('class_id', 'fee_category_id', 'term', 'academic_year'),
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate([
-            'class_id' => 'required|integer',
-            'fee_category_id' => 'required|integer',
-            'academic_year' => 'required|string|max:20',
-            'amount' => 'required|numeric|min:0',
-            'due_date' => 'nullable|date',
-            'frequency' => 'required|in:monthly,quarterly,annual,one_time',
-            'description' => 'nullable|string|max:255',
-            'is_active' => 'boolean',
-        ]);
-
         $sid = $this->getSchoolId();
-        $this->assertRelatedOwnership($data, $sid);
 
-        FeeStructure::create(array_merge($data, [
-            'school_id' => $sid,
-            'is_active' => $data['is_active'] ?? true,
-        ]));
-
-        return back()->with('success', 'Fee structure created.');
-    }
-
-    public function update(Request $request, FeeStructure $feeStructure)
-    {
         $data = $request->validate([
-            'class_id' => 'required|integer',
-            'fee_category_id' => 'required|integer',
-            'academic_year' => 'required|string|max:20',
-            'amount' => 'required|numeric|min:0',
-            'due_date' => 'nullable|date',
-            'frequency' => 'required|in:monthly,quarterly,annual,one_time',
-            'description' => 'nullable|string|max:255',
-            'is_active' => 'boolean',
+            'class_id'        => 'required|integer',
+            'fee_category_id' => 'nullable|integer',
+            'academic_year'   => 'nullable|string|max:20',
+            'term'            => 'nullable|string|max:20',
+            'title'           => 'nullable|string|max:150',
+            'amount'          => 'nullable|numeric|min:0',
+            'due_date'        => 'nullable|date',
+            'frequency'       => 'nullable|string|max:50',
+            'description'     => 'nullable|string|max:255',
         ]);
 
-        $this->assertRelatedOwnership($data, $this->getSchoolId());
+        $this->assertClassOwnership((int) $data['class_id'], $sid);
+        if (!empty($data['fee_category_id'])) {
+            $this->assertCategoryOwnership((int) $data['fee_category_id'], $sid);
+        } else {
+            $defaultCat = FeeCategory::firstOrCreate(['school_id' => $sid, 'name' => 'General Tuition'], ['type' => 'tuition', 'is_active' => true]);
+            $data['fee_category_id'] = $defaultCat->id;
+        }
+
+        $data['school_id'] = $sid;
+        $data['academic_year'] = $data['academic_year'] ?? '2026';
+        $data['frequency'] = $data['frequency'] ?? 'per_term';
+        $data['amount'] = $data['amount'] ?? 0;
+        $data['total_amount'] = $data['amount'];
+        $data['title'] = $data['title'] ?? 'Term Fee Structure';
+
+        FeeStructure::create($data);
+
+        return back()->with('success', 'Fee structure created successfully.');
+    }
+
+    public function update(Request $request, FeeStructure $feeStructure): RedirectResponse
+    {
+        $sid = $this->getSchoolId();
+        abort_unless((int) $feeStructure->school_id === (int) $sid, 404);
+
+        $data = $request->validate([
+            'class_id'        => 'required|integer',
+            'fee_category_id' => 'nullable|integer',
+            'academic_year'   => 'nullable|string|max:20',
+            'term'            => 'nullable|string|max:20',
+            'title'           => 'nullable|string|max:150',
+            'amount'          => 'required|numeric|min:0',
+            'due_date'        => 'nullable|date',
+            'frequency'       => 'nullable|string|max:50',
+            'description'     => 'nullable|string|max:255',
+        ]);
+
+        $this->assertClassOwnership((int) $data['class_id'], $sid);
+        if (!empty($data['fee_category_id'])) {
+            $this->assertCategoryOwnership((int) $data['fee_category_id'], $sid);
+        }
+
+        $data['total_amount'] = $data['amount'];
         $feeStructure->update($data);
 
-        return back()->with('success', 'Fee structure updated.');
+        return back()->with('success', 'Fee structure updated successfully.');
     }
 
-    public function destroy(FeeStructure $feeStructure)
+    public function destroy(FeeStructure $feeStructure): RedirectResponse
     {
+        $sid = $this->getSchoolId();
+        abort_unless((int) $feeStructure->school_id === (int) $sid, 404);
+
         $feeStructure->delete();
 
-        return back()->with('success', 'Fee structure deleted.');
-    }
-
-    private function assertFilterOwnership(Request $request, int $schoolId): void
-    {
-        if ($request->filled('class_id')) {
-            $this->assertClassOwnership((int) $request->class_id, $schoolId);
-        }
-        if ($request->filled('category_id')) {
-            $this->assertCategoryOwnership((int) $request->category_id, $schoolId);
-        }
-    }
-
-    private function assertRelatedOwnership(array $data, int $schoolId): void
-    {
-        $this->assertClassOwnership((int) $data['class_id'], $schoolId);
-        $this->assertCategoryOwnership((int) $data['fee_category_id'], $schoolId);
+        return back()->with('success', 'Fee structure removed.');
     }
 
     private function assertClassOwnership(int $classId, int $schoolId): void
     {
-        abort_unless(SchoolClass::withoutGlobalScopes()->whereKey($classId)->where('school_id', $schoolId)->exists(), 404);
+        abort_unless(
+            SchoolClass::withoutGlobalScopes()->whereKey($classId)->where('school_id', $schoolId)->exists(),
+            404
+        );
     }
 
     private function assertCategoryOwnership(int $categoryId, int $schoolId): void
     {
-        abort_unless(FeeCategory::withoutGlobalScopes()->whereKey($categoryId)->where('school_id', $schoolId)->exists(), 404);
+        abort_unless(
+            FeeCategory::withoutGlobalScopes()->whereKey($categoryId)->where('school_id', $schoolId)->exists(),
+            404
+        );
     }
 }

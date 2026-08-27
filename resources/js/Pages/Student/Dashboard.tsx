@@ -1,8 +1,22 @@
+import { route } from 'ziggy-js';
 import AppLayout from '@/Layouts/AppLayout';
 import MetricCard from '@/components/dashboard/MetricCard';
-import LearnerTodayHero, { LessonPeriod } from '@/components/dashboard/LearnerTodayHero';
-import { Head, Link, usePage } from '@inertiajs/react';
-import { BookOpen, Calendar, Clock, Award, FileText, CheckCircle2 } from 'lucide-react';
+import { LessonPeriod } from '@/components/dashboard/LearnerTodayHero';
+import { Link, usePage } from '@inertiajs/react';
+import {
+    BookOpen,
+    Calendar,
+    Clock,
+    Award,
+    CheckCircle2,
+    Trophy,
+    ArrowRight,
+    MapPin,
+    User,
+    Sparkles,
+    GraduationCap,
+    AlertCircle,
+} from 'lucide-react';
 import React from 'react';
 
 interface Props {
@@ -21,6 +35,36 @@ interface Props {
         due_date: string;
         status: 'pending' | 'submitted' | 'graded';
     }>;
+    talentSummary?: {
+        summary: {
+            total_teams: number;
+            total_clubs: number;
+            total_events: number;
+            total_achievements: number;
+            personal_bests: number;
+            school_records: number;
+        };
+        house?: {
+            name: string;
+            total_points: number;
+            color_hex: string;
+        } | null;
+        achievements: Array<{
+            title: string;
+            activity_name: string;
+            award_level: string;
+            awarded_date: string;
+        }>;
+        teams: Array<{
+            team_name: string;
+            activity_name: string;
+            role: string;
+        }>;
+        clubs: Array<{
+            club_name: string;
+            role: string;
+        }>;
+    } | null;
 }
 
 export default function StudentDashboard({
@@ -28,150 +72,304 @@ export default function StudentDashboard({
     todayTimetable = [],
     pendingAssignments = [],
     publishedMarksCount = 0,
+    talentSummary,
 }: Props) {
     const { auth } = usePage().props as any;
 
-    // Truthful identity: Derive name from authenticated user session
     const learnerName = studentProfile?.name || auth?.user?.name || 'Learner';
     const admissionNo = studentProfile?.admission_number || 'Admission Pending';
-    const gradeStream = studentProfile?.grade ? `${studentProfile.grade} · Stream ${studentProfile.stream || 'A'}` : 'Enrolled';
+    const gradeStream = studentProfile?.grade
+        ? `${studentProfile.grade} · Stream ${studentProfile.stream || 'A'}`
+        : 'Enrolled Learner';
 
-    const currentLesson = todayTimetable.find((t) => t.status === 'current') || todayTimetable[0] || null;
-    const nextLesson = todayTimetable.find((t) => t.status === 'upcoming') || (todayTimetable.length > 1 ? todayTimetable[1] : null);
+    const currentLesson =
+        todayTimetable.find((t) => t.status === 'current') || todayTimetable[0] || null;
+    const nextLesson =
+        todayTimetable.find((t) => t.status === 'upcoming') ||
+        (todayTimetable.length > 1 ? todayTimetable[1] : null);
+
+    const hasLessons = todayTimetable.length > 0;
+    const hasAssignments = pendingAssignments.length > 0;
 
     return (
         <AppLayout title="Student Learning Cockpit">
-            
-            {/* Header & Identity */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="space-y-0.5">
-                    <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
-                        Welcome back, {learnerName.split(' ')[0]}
-                    </h1>
-                    <p className="text-xs sm:text-sm text-slate-500">
-                        {gradeStream} · Adm: {admissionNo}
-                    </p>
-                </div>
-            </div>
-
-            {/* Live Today Hero Timetable Banner */}
-            <LearnerTodayHero
-                title="Classroom Timetable"
-                subtitle="Live Schedule"
-                currentLesson={currentLesson}
-                nextLesson={nextLesson}
-                emptyMessage="No lesson timetable published for today."
-            />
-
-            {/* Quick Metrics */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <MetricCard
-                    title="Active Homework Tasks"
-                    value={pendingAssignments.length}
-                    icon={BookOpen}
-                    variant={pendingAssignments.length > 0 ? 'primary' : 'default'}
-                    badge={pendingAssignments.length > 0 ? 'Due Soon' : 'All Clear'}
-                />
-                <MetricCard
-                    title="Lessons Scheduled Today"
-                    value={todayTimetable.length}
-                    icon={Calendar}
-                    variant="default"
-                    description="Daily Period Timetable"
-                />
-                <MetricCard
-                    title="Published Continuous Marks"
-                    value="Academic Standing"
-                    icon={Award}
-                    variant="success"
-                    badge="Active Learner"
-                />
-            </div>
-
-            {/* Homework Deadlines & Daily Timetable Schedule */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                
-                {/* Timetable Periods */}
-                <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-indigo-600" />
-                            <h3 className="text-base font-bold text-slate-950">Today's Class Schedule</h3>
+            <div className="space-y-6 max-w-7xl mx-auto pb-10">
+                {/* 1. Learner Header & Status Strip */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/60">
+                    <div className="space-y-1.5">
+                        <div className="flex items-center gap-2.5">
+                            <span
+                                className="w-2.5 h-2.5 rounded-full bg-teal-500 ring-4 ring-teal-500/20"
+                                aria-hidden="true"
+                            />
+                            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+                                Welcome back, {learnerName.split(' ')[0]}
+                            </h1>
                         </div>
-                        <Link href="/school/student/timetable" className="text-xs font-bold text-indigo-600 hover:text-indigo-700">
-                            Full Week
-                        </Link>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground font-medium">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-muted/60 border border-border/50">
+                                <GraduationCap className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                                <strong className="text-foreground">{gradeStream}</strong>
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-muted/60 border border-border/50 font-mono text-[11px]">
+                                Adm: <strong className="text-foreground">{admissionNo}</strong>
+                            </span>
+                        </div>
                     </div>
 
-                    {todayTimetable.length === 0 ? (
-                        <div className="py-8 text-center border border-dashed border-slate-200 rounded-xl space-y-1">
-                            <Calendar className="w-6 h-6 text-slate-400 mx-auto" />
-                            <p className="text-xs text-slate-500">No periods scheduled for today.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-2.5">
-                            {todayTimetable.map((t, idx) => (
-                                <div
-                                    key={idx}
-                                    className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
-                                        t.status === 'current'
-                                            ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-500/20'
-                                            : 'bg-slate-50 border-slate-200'
-                                    }`}
-                                >
-                                    <div className="space-y-0.5">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-extrabold text-xs text-indigo-600">Period {t.period || idx + 1}</span>
-                                            <span className="text-xs font-bold text-slate-900">{t.subject}</span>
-                                        </div>
-                                        <p className="text-[11px] text-slate-500">{t.teacher} · {t.room}</p>
-                                    </div>
-                                    <span className="text-xs font-mono font-semibold text-slate-600">{t.time}</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    <div className="flex items-center gap-2 text-xs font-semibold">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-700 dark:text-teal-300">
+                            <Sparkles className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                            <span>Active Term</span>
+                        </span>
+                    </div>
                 </div>
 
-                {/* Homework Deadlines */}
-                <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-4">
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-base font-bold text-slate-950">Homework Due</h3>
-                        <Link href="/school/student/homework" className="text-xs font-bold text-indigo-600 hover:text-indigo-700">
-                            View All
-                        </Link>
+                {/* 2. Live Today Hero Schedule Banner */}
+                <div className="bg-card text-card-foreground rounded-2xl border border-border/80 p-5 sm:p-6 shadow-xs relative overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3 mb-4">
+                        <div className="space-y-0.5">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">
+                                Live Classroom Telemetry
+                            </span>
+                            <h3 className="text-base font-bold text-foreground">
+                                Today's Learning Schedule
+                            </h3>
+                        </div>
+                        <span className="text-xs font-semibold text-muted-foreground">
+                            {todayTimetable.length} {todayTimetable.length === 1 ? 'Period' : 'Periods'} Total
+                        </span>
                     </div>
 
-                    {pendingAssignments.length === 0 ? (
-                        <div className="py-8 text-center border border-dashed border-slate-200 rounded-xl space-y-1">
-                            <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto" />
-                            <p className="text-xs text-slate-500">No pending assignments due.</p>
+                    {!hasLessons ? (
+                        <div className="py-8 text-center border border-dashed border-border rounded-xl space-y-2 bg-muted/20">
+                            <Clock className="w-6 h-6 text-muted-foreground mx-auto" aria-hidden="true" />
+                            <p className="text-xs text-muted-foreground">
+                                No lessons scheduled for today. Enjoy your private study period.
+                            </p>
                         </div>
                     ) : (
-                        <div className="space-y-3">
-                            {pendingAssignments.map((hw) => (
-                                <div key={hw.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="space-y-0.5">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">{hw.subject}</span>
-                                            <h4 className="text-xs font-bold text-slate-900">{hw.title}</h4>
-                                        </div>
-                                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold uppercase">
-                                            {hw.status}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* In Session Period */}
+                            {currentLesson ? (
+                                <div className="p-4 rounded-xl bg-teal-500/10 border border-teal-500/20 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="px-2 py-0.5 rounded-md bg-teal-600 text-white text-[10px] font-extrabold uppercase tracking-wider">
+                                            In Session Now
+                                        </span>
+                                        <span className="text-xs font-mono font-bold text-teal-700 dark:text-teal-300">
+                                            {currentLesson.time}
                                         </span>
                                     </div>
-                                    <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                        <span>Due: {hw.due_date}</span>
+                                    <div className="text-lg font-black text-foreground">
+                                        {currentLesson.subject}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                        {currentLesson.teacher && (
+                                            <span className="flex items-center gap-1">
+                                                <User className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                                                {currentLesson.teacher}
+                                            </span>
+                                        )}
+                                        <span className="flex items-center gap-1">
+                                            <MapPin className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                                            {currentLesson.room || 'Classroom'}
+                                        </span>
                                     </div>
                                 </div>
-                            ))}
+                            ) : (
+                                <div className="p-4 rounded-xl bg-muted/30 border border-border/60 flex items-center justify-center text-xs text-muted-foreground">
+                                    No active lesson in session right now.
+                                </div>
+                            )}
+
+                            {/* Next Period */}
+                            {nextLesson ? (
+                                <div className="p-4 rounded-xl bg-muted/30 border border-border/60 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="px-2 py-0.5 rounded-md bg-muted border border-border/80 text-muted-foreground text-[10px] font-extrabold uppercase tracking-wider">
+                                            Next Period
+                                        </span>
+                                        <span className="text-xs font-mono font-bold text-foreground">
+                                            {nextLesson.time}
+                                        </span>
+                                    </div>
+                                    <div className="text-base font-bold text-foreground">
+                                        {nextLesson.subject}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                        {nextLesson.teacher && (
+                                            <span className="flex items-center gap-1">
+                                                <User className="w-3.5 h-3.5" aria-hidden="true" />
+                                                {nextLesson.teacher}
+                                            </span>
+                                        )}
+                                        <span className="flex items-center gap-1">
+                                            <MapPin className="w-3.5 h-3.5" aria-hidden="true" />
+                                            {nextLesson.room || 'Classroom'}
+                                        </span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="p-4 rounded-xl bg-muted/30 border border-border/60 flex items-center justify-center text-xs text-muted-foreground">
+                                    No further lessons scheduled today.
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
 
-            </div>
+                {/* 3. Key Metrics */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <MetricCard
+                        title="Active Homework Tasks"
+                        value={pendingAssignments.length}
+                        icon={BookOpen}
+                        variant={pendingAssignments.length > 0 ? 'primary' : 'success'}
+                        badge={pendingAssignments.length > 0 ? 'Pending' : 'All Clear'}
+                        description={
+                            pendingAssignments.length > 0
+                                ? 'Continuous assessments to submit'
+                                : 'All assignments submitted'
+                        }
+                    />
+                    <MetricCard
+                        title="Published Exam Scores"
+                        value={publishedMarksCount}
+                        icon={Award}
+                        variant="success"
+                        badge="CBC Term Marks"
+                        description="Summative & formative records"
+                    />
+                    <MetricCard
+                        title="Daily Timetable Periods"
+                        value={todayTimetable.length}
+                        icon={Clock}
+                        variant="default"
+                        badge="Today"
+                        description="Allocated instructional blocks"
+                    />
+                </div>
 
+                {/* 4. Homework & Assignments Detailed Stream */}
+                <div className="bg-card text-card-foreground rounded-2xl border border-border/80 shadow-xs overflow-hidden">
+                    <div className="p-5 border-b border-border/60 flex items-center justify-between">
+                        <div className="space-y-0.5">
+                            <h3 className="text-base font-bold text-foreground tracking-tight">
+                                Homework & Learning Tasks
+                            </h3>
+                            <p className="text-xs text-muted-foreground">
+                                Continuous assessments and prep work due for submission.
+                            </p>
+                        </div>
+                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                            {pendingAssignments.length} Pending
+                        </span>
+                    </div>
+
+                    <div className="p-5 sm:p-6">
+                        {!hasAssignments ? (
+                            <div className="py-8 text-center border border-dashed border-border rounded-xl space-y-2 bg-muted/20">
+                                <CheckCircle2 className="w-6 h-6 text-emerald-500 dark:text-emerald-400 mx-auto" aria-hidden="true" />
+                                <div className="space-y-0.5">
+                                    <p className="text-xs font-bold text-foreground">You are all caught up!</p>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        No homework tasks or assignments currently awaiting your submission.
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-2.5">
+                                {pendingAssignments.map((task) => {
+                                    const statusStyles = {
+                                        pending: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200/80',
+                                        submitted: 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-200/80',
+                                        graded: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-200/80',
+                                    };
+
+                                    return (
+                                        <div
+                                            key={task.id}
+                                            className="p-3.5 sm:p-4 rounded-xl border border-border/80 bg-muted/30 hover:bg-muted/60 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-h-[44px]"
+                                        >
+                                            <div className="space-y-1 min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-700 dark:text-teal-300 font-bold text-[11px]">
+                                                        {task.subject}
+                                                    </span>
+                                                    <h4 className="text-xs font-bold text-foreground truncate">
+                                                        {task.title}
+                                                    </h4>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                                    <Calendar className="w-3 h-3 shrink-0" aria-hidden="true" />
+                                                    <span>Due: {task.due_date}</span>
+                                                </div>
+                                            </div>
+
+                                            <span
+                                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full border font-semibold text-[10px] uppercase tracking-wider shrink-0 self-start sm:self-auto ${
+                                                    statusStyles[task.status] || statusStyles.pending
+                                                }`}
+                                            >
+                                                {task.status}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* 5. Co-Curricular & Talent Highlights */}
+                {talentSummary && (
+                    <div className="rounded-2xl border border-border/80 bg-card text-card-foreground p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3.5 shrink-0">
+                            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0">
+                                <Trophy className="w-5 h-5" aria-hidden="true" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-foreground leading-tight">
+                                    Talent & Activities Passport
+                                </h3>
+                                <p className="text-xs text-muted-foreground">
+                                    Sports leagues, clubs, house standings, and personal achievements
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1 max-w-2xl text-xs">
+                            <div className="px-3 py-2 rounded-xl bg-muted/40 border border-border/50 text-center sm:text-left">
+                                <span className="text-[10px] font-semibold text-muted-foreground uppercase block">My Teams</span>
+                                <strong className="text-sm font-black text-foreground">{talentSummary.summary.total_teams}</strong>
+                            </div>
+                            <div className="px-3 py-2 rounded-xl bg-muted/40 border border-border/50 text-center sm:text-left">
+                                <span className="text-[10px] font-semibold text-muted-foreground uppercase block">My Clubs</span>
+                                <strong className="text-sm font-black text-foreground">{talentSummary.summary.total_clubs}</strong>
+                            </div>
+                            <div className="px-3 py-2 rounded-xl bg-muted/40 border border-border/50 text-center sm:text-left">
+                                <span className="text-[10px] font-semibold text-muted-foreground uppercase block">Achievements</span>
+                                <strong className="text-sm font-black text-emerald-600 dark:text-emerald-400">{talentSummary.summary.total_achievements}</strong>
+                            </div>
+                            <div className="px-3 py-2 rounded-xl bg-muted/40 border border-border/50 text-center sm:text-left">
+                                <span className="text-[10px] font-semibold text-muted-foreground uppercase block">House</span>
+                                <strong className="text-xs font-black text-teal-600 dark:text-teal-400 truncate block">
+                                    {talentSummary.house?.name || 'Unassigned'}
+                                </strong>
+                            </div>
+                        </div>
+
+                        <Link
+                            href={route('student.cocurricular')}
+                            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-border/80 hover:bg-muted/80 text-foreground font-semibold text-xs transition-colors shrink-0 min-h-[44px] sm:min-h-0"
+                        >
+                            <span>View Passport</span>
+                            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                        </Link>
+                    </div>
+                )}
+            </div>
         </AppLayout>
     );
 }

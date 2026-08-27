@@ -9,7 +9,18 @@ class Holiday extends Model
 {
     use BelongsToSchool;
 
-    protected $fillable = ['school_id', 'name', 'date', 'description'];
+    protected $fillable = [
+        'school_id',
+        'name',
+        'date',
+        'end_date',
+        'type',
+        'term',
+        'description',
+    ];
 
-    protected $casts = ['date' => 'date'];
+    protected $casts = [
+        'date'     => 'date:Y-m-d',
+        'end_date' => 'date:Y-m-d',
+    ];
 }

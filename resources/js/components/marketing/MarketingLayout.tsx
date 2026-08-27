@@ -69,7 +69,7 @@ const DEFAULT_FOOTER_COLUMNS: FooterColumn[] = [
             { label: 'School Admin Portal', href: '/login'  },
             { label: 'Teacher Workspace', href: '/login'  },
             { label: '', href: '/login' },
-            { label: 'Setup My School', href: '/register'  },
+            { label: 'Setup My School', href: '/register-school'  },
         ]
     },
     {
@@ -229,25 +229,14 @@ export default function MarketingLayout({
 
                         {/* Desktop Action Buttons */}
                         <div className="hidden lg:flex items-center gap-3 shrink-0">
-                            <Link
-                                href="/login"
-                                className="px-4 py-2 text-xs font-bold text-slate-700 hover:text-emerald-700 transition-colors"
-                            >
-                                Sign In
-                            </Link>
-                            <Link
-                                href="/register"
-                                className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.02]"
-                            >
-                                <span>Setup My School</span>
-                                <ChevronRight className="w-4 h-4" />
-                            </Link>
+                            <a href="/login" className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors px-3 py-2 cursor-pointer">Sign In</a>
+                            <a href="/register-school" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all cursor-pointer">Setup My School &rsaquo;</a>
                         </div>
 
                         {/* Mobile Menu Button */}
                         <div className="flex lg:hidden items-center gap-2">
                             <Link
-                                href="/register"
+                                href="/register-school"
                                 className="px-3 py-1.5 rounded-full bg-emerald-600 text-white text-[11px] font-bold shadow-xs hover:bg-emerald-700"
                             >
                                 Setup
@@ -288,7 +277,7 @@ export default function MarketingLayout({
 
                             <div className="pt-4 border-t border-slate-100 space-y-3">
                                 <Link
-                                    href="/register"
+                                    href="/register-school"
                                     onClick={() => setMobileMenuOpen(false)}
                                     className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-600 text-white text-xs font-bold shadow-md shadow-emerald-600/20 hover:bg-emerald-700"
                                 >
@@ -434,7 +423,7 @@ export default function MarketingLayout({
                                 <li><Link href="/login" className="hover:text-white transition-colors">Parent & Student Hub</Link></li>
                                 <li><Link href="/pricing" className="hover:text-white transition-colors">Plans & Pricing</Link></li>
                                 <li><Link href="/contact" className="hover:text-white transition-colors">Book a Live Demo</Link></li>
-                                <li><Link href="/register" className="hover:text-white transition-colors">Setup My School</Link></li>
+                                <li><a href="/register-school" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all cursor-pointer">Setup My School &rsaquo;</a></li>
                             </ul>
                         </div>
 

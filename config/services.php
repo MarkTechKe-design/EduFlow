@@ -1,11 +1,6 @@
 <?php
 
 return [
-    'google' => [
-        'client_id' => env('GOOGLE_CLIENT_ID'),
-        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
-        'redirect' => env('GOOGLE_REDIRECT_URI', env('APP_URL', 'http://localhost') . '/auth/google/callback'),
-    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -40,10 +35,10 @@ return [
         ],
     ],
 
-
     'jitsi' => [
         'domain' => env('JITSI_DOMAIN', 'meet.ffmuc.net'),
     ],
+
     'paystack' => [
         'public_key'  => env('PAYSTACK_PUBLIC_KEY', ''),
         'secret_key'  => env('PAYSTACK_SECRET_KEY', ''),

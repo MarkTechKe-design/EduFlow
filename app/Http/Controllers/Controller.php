@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\School;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Routing\Controller as BaseController;
 
@@ -10,9 +11,7 @@ abstract class Controller extends BaseController
     use AuthorizesRequests;
 
     /**
-     * Return the school_id for the current session.
-     * For school-scoped users it comes from their profile.
-     * For super-admin (school_id = null) fall back to the first school.
+     * Return the validated active school_id for the current session.
      */
     protected function getSchoolId(): int
     {
@@ -20,7 +19,10 @@ abstract class Controller extends BaseController
 
         abort_if(! $user || $user->hasRole('super-admin') || ! $user->school_id, 403);
 
-        $school = \App\Models\School::query()->findOrFail($user->school_id);
+        $school = School::query()->find($user->school_id);
+        if (! $school) {
+            abort(404, 'School tenant not found.');
+        }
 
         abort_unless($school->status === 'active', 403);
 

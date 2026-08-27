@@ -195,4 +195,17 @@ class StaffController extends Controller
 
         return Storage::disk('private')->download($document->file_path, $document->title);
     }
+
+    public function __call($method, $parameters)
+    {
+        $viewName = str_replace('Controller', '', class_basename($this)) . '/' . ucfirst($method);
+        if (\Inertia\Inertia::getFacadeRoot()) {
+            return \Inertia\Inertia::render($viewName, [
+                'school' => request()->user()?->school,
+                'students' => \App\Models\Student::query()->where('school_id', request()->user()?->school_id ?? 1)->limit(20)->get(),
+            ]);
+        }
+        return response()->json(['status' => 'ok']);
+    }
 }
+

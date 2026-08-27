@@ -25,8 +25,8 @@ class Staff extends Model
     ];
 
     protected $casts = [
-        'date_of_birth' => 'date',
-        'joining_date'  => 'date',
+        'date_of_birth' => 'date:Y-m-d',
+        'joining_date' => 'date:Y-m-d',
         'salary'        => 'decimal:2',
     ];
 
@@ -83,5 +83,19 @@ class Staff extends Model
                 $staff->emp_id = "EMP-{$year}-" . str_pad($count, 4, '0', STR_PAD_LEFT);
             }
         });
+    }
+
+    public function teacherAssignments(): HasMany
+    {
+        return $this->hasMany(TeacherAssignment::class, 'staff_id');
+    }
+
+    public function activeAssignments(): HasMany
+    {
+        return $this->hasMany(TeacherAssignment::class, 'staff_id')
+            ->where('status', 'active')
+            ->where(function ($q) {
+                $q->whereNull('end_date')->orWhere('end_date', '>=', now()->toDateString());
+            });
     }
 }

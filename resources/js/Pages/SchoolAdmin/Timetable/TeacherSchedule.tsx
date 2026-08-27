@@ -1,4 +1,4 @@
-import { router, usePage } from '@inertiajs/react';
+import { router, Link } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
 import { Button } from '@/components/ui/button';
 import {
@@ -6,109 +6,140 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, User } from 'lucide-react';
-import { Link } from '@inertiajs/react';
-import type { Staff, Timetable, TimeSlot, DayOfWeek, PageProps } from '@/Types';
+import { ArrowLeft, User, CalendarDays, Coffee, Utensils } from 'lucide-react';
+import type { Staff, Timetable, PageProps } from '@/types';
 
-interface Props {
+interface TimeSlotItem {
+    id: number;
+    label: string;
+    start_time: string;
+    end_time: string;
+    type: 'lesson' | 'break';
+    sort_order: number;
+}
+
+type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+interface Props extends PageProps {
     teachers: Staff[];
     periods: Timetable[];
     grid: Record<string, Record<string, Timetable>>;
+    slots: TimeSlotItem[];
     days: DayOfWeek[];
-    defaultSlots: TimeSlot[];
+    isTeacherOnly: boolean;
+    selectedStaff: Staff | null;
     filters: { teacher_id?: string };
 }
 
 const DAY_LABELS: Record<string, string> = {
     monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday',
-    thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday',
+    thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday',
 };
 
 const DAY_SHORT: Record<string, string> = {
     monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed',
-    thursday: 'Thu', friday: 'Fri', saturday: 'Sat',
+    thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
 };
 
 function fmt12(time: string) {
-    const [h, m] = time.split(':').map(Number);
+    if (!time) return '';
+    const parts = time.split(':');
+    const h = Number(parts[0]);
+    const m = Number(parts[1] || 0);
     const ampm = h >= 12 ? 'PM' : 'AM';
     return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
 const COLORS = [
-    'bg-indigo-100 text-indigo-700',
-    'bg-emerald-100 text-emerald-700',
-    'bg-amber-100 text-amber-700',
-    'bg-rose-100 text-rose-700',
-    'bg-cyan-100 text-cyan-700',
-    'bg-violet-100 text-violet-700',
+    'bg-indigo-50 text-indigo-900 border-indigo-200',
+    'bg-emerald-50 text-emerald-900 border-emerald-200',
+    'bg-sky-50 text-sky-900 border-sky-200',
+    'bg-purple-50 text-purple-900 border-purple-200',
+    'bg-amber-50 text-amber-900 border-amber-200',
+    'bg-rose-50 text-rose-900 border-rose-200',
 ];
 
-export default function TeacherSchedule({ teachers, periods, grid, days, defaultSlots, filters }: Props) {
+export default function TeacherSchedule({ teachers, periods, grid, slots = [], days = [], isTeacherOnly, selectedStaff, filters }: Props) {
     function applyFilter(key: string, value: string) {
         router.get('/school/timetable/teacher', { ...filters, [key]: value || undefined }, { preserveScroll: true });
     }
 
-    const selectedTeacher = teachers.find(t => String(t.id) === filters.teacher_id);
+    const currentTeacher = selectedStaff || teachers.find(t => String(t.id) === filters.teacher_id);
 
-    // Count periods per day for summary
     const dayCount: Record<string, number> = {};
-    periods.forEach(p => { dayCount[p.day_of_week] = (dayCount[p.day_of_week] ?? 0) + 1; });
+    (periods || []).forEach(p => { dayCount[p.day_of_week] = (dayCount[p.day_of_week] ?? 0) + 1; });
 
-    function getPeriod(day: DayOfWeek, slot: TimeSlot): Timetable | undefined {
+    function getPeriod(day: DayOfWeek, slot: TimeSlotItem): Timetable | undefined {
         const dayGrid = grid[day] ?? {};
-        return dayGrid[slot.start] ?? dayGrid[slot.start + ':00'];
+        return dayGrid[slot.start_time] ?? dayGrid[slot.start_time + ':00'];
     }
 
     return (
-        <AppLayout title="Teacher Schedule">
-            <div className="space-y-6">
+        <AppLayout title="Teacher Workload Schedule">
+            <div className="space-y-6 max-w-7xl mx-auto pb-16">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <Link href="/school/timetable" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white">
-                            <ArrowLeft className="w-4 h-4" /> Timetable
+                        <Link href="/school/timetable">
+                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 rounded-xl">
+                                <ArrowLeft className="w-4 h-4" />
+                            </Button>
                         </Link>
-                        <span className="text-slate-300 dark:text-slate-700">|</span>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Teacher Schedule</h1>
+                        <div>
+                            <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                                <User className="w-5 h-5 text-indigo-600" />
+                                <span>Teacher Workload & Weekly Schedule</span>
+                            </h1>
+                            <p className="text-xs text-slate-500 mt-1">
+                                Individual educator timetable matrix and period distribution across classes.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
-                {/* Teacher selector */}
-                <Card className="border-slate-200 dark:border-slate-800">
-                    <CardContent className="p-4">
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Teacher</label>
-                            <Select value={filters.teacher_id ?? ''} onValueChange={v => applyFilter('teacher_id', v)}>
-                                <SelectTrigger className="w-64"><SelectValue placeholder="Select a teacher" /></SelectTrigger>
-                                <SelectContent>
-                                    {teachers.map(t => (
-                                        <SelectItem key={t.id} value={String(t.id)}>{t.first_name} {t.last_name} ({t.emp_id})</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </CardContent>
-                </Card>
+                {!isTeacherOnly && (
+                    <Card className="border-slate-200 shadow-2xs">
+                        <CardContent className="p-4">
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Select Teacher</label>
+                                <Select value={filters.teacher_id ?? ''} onValueChange={v => applyFilter('teacher_id', v)}>
+                                    <SelectTrigger className="w-72 h-9 text-xs"><SelectValue placeholder="Select faculty member..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {teachers.map(t => (
+                                            <SelectItem key={t.id} value={String(t.id)}>
+                                                {t.first_name} {t.last_name} ({t.emp_id})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
 
-                {!filters.teacher_id ? (
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex items-center justify-center py-24">
-                        <div className="text-center">
-                            <User className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-                            <p className="text-slate-500">Select a teacher to view their weekly schedule</p>
-                        </div>
+                {!filters.teacher_id && !currentTeacher ? (
+                    <div className="rounded-2xl border border-slate-200 bg-white p-16 text-center shadow-2xs">
+                        <User className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                        <h3 className="text-sm font-bold text-slate-800">No Teacher Selected</h3>
+                        <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                            Choose a faculty member from the dropdown above to view their weekly teaching load.
+                        </p>
                     </div>
                 ) : (
-                    <>
-                        {/* Summary */}
-                        {selectedTeacher && (
-                            <div className="flex items-center gap-4 flex-wrap">
+                    <div className="space-y-4">
+                        {currentTeacher && (
+                            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div>
-                                    <p className="font-semibold text-slate-900 dark:text-white">{selectedTeacher.first_name} {selectedTeacher.last_name}</p>
-                                    <p className="text-sm text-slate-400">{periods.length} periods/week</p>
+                                    <h2 className="text-base font-black text-slate-900">
+                                        {currentTeacher.first_name} {currentTeacher.last_name}
+                                    </h2>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                        Staff ID: <span className="font-mono">{currentTeacher.emp_id}</span> • Total Teaching Load: <strong className="text-indigo-600">{periods?.length ?? 0} periods/week</strong>
+                                    </p>
                                 </div>
-                                <div className="flex gap-2 flex-wrap ml-auto">
-                                    {days.map(day => dayCount[day] ? (
-                                        <Badge key={day} variant="outline" className="text-xs">
+
+                                <div className="flex gap-1.5 flex-wrap">
+                                    {(days || []).map(day => dayCount[day] ? (
+                                        <Badge key={day} variant="outline" className="text-xs font-semibold bg-slate-50">
                                             {DAY_SHORT[day]}: {dayCount[day]} periods
                                         </Badge>
                                     ) : null)}
@@ -116,54 +147,80 @@ export default function TeacherSchedule({ teachers, periods, grid, days, default
                             </div>
                         )}
 
-                        {/* Grid */}
-                        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-x-auto">
-                            <table className="w-full min-w-[700px]">
+                        <div className="rounded-2xl border border-slate-200 bg-white shadow-2xs overflow-x-auto">
+                            <table className="w-full min-w-[760px] text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-slate-50 dark:bg-slate-900">
-                                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase w-28 border-b border-slate-200 dark:border-slate-800">Time</th>
-                                        {days.map(day => (
-                                            <th key={day} className="px-2 py-3 text-center text-xs font-semibold text-slate-500 uppercase border-b border-l border-slate-200 dark:border-slate-800">
+                                    <tr className="bg-slate-50 text-slate-700 border-b border-slate-200">
+                                        <th className="py-3 px-3 text-xs font-bold uppercase tracking-wider w-28 text-center border-r border-slate-200">
+                                            Time (EAT)
+                                        </th>
+                                        {(days || []).map(day => (
+                                            <th key={day} className="py-3 px-3 text-center text-xs font-bold uppercase tracking-wider border-r border-slate-200 last:border-0">
                                                 {DAY_SHORT[day]}
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    {defaultSlots.map((slot, idx) => (
-                                        <tr key={slot.start} className="border-b border-slate-100 dark:border-slate-800/50 last:border-0">
-                                            <td className="px-4 py-2 text-xs text-slate-400">
-                                                <span className="font-medium text-slate-600 dark:text-slate-300">{fmt12(slot.start)}</span>
-                                                <br />
-                                                <span className="text-[11px]">{fmt12(slot.end)}</span>
-                                            </td>
-                                            {days.map(day => {
-                                                const period = getPeriod(day, slot);
-                                                const color = period ? COLORS[idx % COLORS.length] : '';
-                                                return (
-                                                    <td key={day} className="px-1 py-1 border-l border-slate-100 dark:border-slate-800/50 align-top">
-                                                        {period ? (
-                                                            <div className={`rounded-lg p-2 ${color}`}>
-                                                                <p className="text-xs font-semibold truncate">{period.subject?.name ?? '—'}</p>
-                                                                <p className="text-[10px] opacity-70 truncate">
-                                                                    {period.school_class?.name ?? ''} {period.section?.name ?? ''}
-                                                                </p>
-                                                                {period.room && (
-                                                                    <p className="text-[10px] opacity-60">Room {period.room}</p>
-                                                                )}
-                                                            </div>
-                                                        ) : (
-                                                            <div className="h-14 rounded-lg bg-slate-50 dark:bg-slate-900/50" />
-                                                        )}
+                                <tbody className="divide-y divide-slate-100 font-medium">
+                                    {(slots || []).map((slot, idx) => {
+                                        if (slot.type === 'break') {
+                                            const isTea = slot.label.toLowerCase().includes('tea') || slot.label.toLowerCase().includes('morning');
+                                            return (
+                                                <tr key={slot.id} className={isTea ? 'bg-amber-50/70 text-amber-950 font-bold border-y border-amber-200' : 'bg-emerald-50/70 text-emerald-950 font-bold border-y border-emerald-200'}>
+                                                    <td className="py-2.5 px-3 text-[11px] text-center font-mono whitespace-nowrap border-r border-current/20">
+                                                        {fmt12(slot.start_time)} - {fmt12(slot.end_time)}
                                                     </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    ))}
+                                                    <td colSpan={(days || []).length} className="py-2 px-4 text-center text-xs uppercase tracking-wider">
+                                                        <div className="inline-flex items-center gap-2">
+                                                            {isTea ? <Coffee className="w-3.5 h-3.5 text-amber-700" /> : <Utensils className="w-3.5 h-3.5 text-emerald-700" />}
+                                                            <span>{slot.label}</span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+
+                                        return (
+                                            <tr key={slot.id} className="hover:bg-slate-50/40 transition-colors">
+                                                <td className="py-2 px-3 text-center border-r border-slate-200 bg-slate-50/30 whitespace-nowrap">
+                                                    <div className="text-xs font-bold text-slate-800 font-mono">{fmt12(slot.start_time)}</div>
+                                                    <div className="text-[10px] text-slate-400 font-mono">{fmt12(slot.end_time)}</div>
+                                                    <div className="text-[9px] text-slate-400 font-semibold uppercase mt-0.5">{slot.label}</div>
+                                                </td>
+
+                                                {(days || []).map(day => {
+                                                    const period = getPeriod(day, slot);
+                                                    const color = period ? COLORS[idx % COLORS.length] : '';
+
+                                                    return (
+                                                        <td key={day} className="p-1.5 border-r border-slate-100 last:border-0 align-top w-[18%]">
+                                                            {period ? (
+                                                                <div className={`p-2.5 rounded-xl border ${color} shadow-2xs`}>
+                                                                    <div className="font-black text-xs leading-tight truncate">
+                                                                        {period.subject?.name ?? '—'}
+                                                                    </div>
+                                                                    <div className="text-[10px] font-semibold text-slate-700 mt-1 truncate">
+                                                                        {period.school_class?.name ?? ''} {period.section?.name ? `(${period.section.name})` : ''}
+                                                                    </div>
+                                                                    {period.room && (
+                                                                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                                                            Rm: {period.room}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="h-16 rounded-xl bg-slate-50/50 border border-slate-100" />
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
-                    </>
+                    </div>
                 )}
             </div>
         </AppLayout>

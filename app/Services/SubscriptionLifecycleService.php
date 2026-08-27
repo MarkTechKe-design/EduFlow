@@ -25,7 +25,13 @@ class SubscriptionLifecycleService
     {
         if (! in_array($to, self::STATUSES, true)) throw ValidationException::withMessages(['status' => 'Unsupported subscription status.']);
         return $this->database->transaction(function () use ($subscription, $to, $actor, $metadata): SchoolSubscription {
-            $locked = SchoolSubscription::query()->lockForUpdate()->findOrFail($subscription->id);
+            // Webhooks may run without an authenticated user. Keep the explicit
+            // tenant predicate here so lifecycle transitions remain tenant-safe.
+            $locked = SchoolSubscription::withoutGlobalScopes()
+                ->whereKey($subscription->id)
+                ->where('school_id', $subscription->school_id)
+                ->lockForUpdate()
+                ->firstOrFail();
             $from = $locked->lifecycle_status ?: $locked->status;
             if ($from !== $to && ! in_array($to, self::TRANSITIONS[$from] ?? [], true)) {
                 throw ValidationException::withMessages(['status' => "Cannot transition a subscription from {$from} to {$to}."]);

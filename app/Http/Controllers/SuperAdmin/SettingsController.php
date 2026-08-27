@@ -14,6 +14,8 @@ class SettingsController extends Controller
 {
     public function index(): Response
     {
+        $this->authorize('viewAny', PlatformSetting::class);
+
         $settings = PlatformSetting::query()->get()->pluck('value', 'key')->toArray();
 
         $registerBgs = PlatformSetting::get('register_backgrounds');
@@ -43,6 +45,8 @@ class SettingsController extends Controller
 
     public function updateGeneral(Request $request): RedirectResponse
     {
+        $this->authorize('edit', PlatformSetting::class);
+
         $request->validate([
             'platform_name'          => 'required|string|max:100',
             'support_email'          => 'nullable|email|max:150',
@@ -110,8 +114,10 @@ class SettingsController extends Controller
 
     public function deleteRegisterBackground(Request $request): RedirectResponse
     {
+        $this->authorize('edit', PlatformSetting::class);
+
         $request->validate(['path' => 'required|string']);
-        $path = $request->input('path');
+        $path = $request->input($path);
 
         $existing = PlatformSetting::get('register_backgrounds');
         if (is_string($existing)) {
@@ -137,6 +143,8 @@ class SettingsController extends Controller
 
     public function updatePayment(Request $request): RedirectResponse
     {
+        $this->authorize('edit', PlatformSetting::class);
+
         $request->validate([
             'paystack_key'      => 'nullable|string|max:255',
             'paystack_secret'   => 'nullable|string|max:255',
@@ -160,6 +168,8 @@ class SettingsController extends Controller
 
     public function updateSmtp(Request $request): RedirectResponse
     {
+        $this->authorize('edit', PlatformSetting::class);
+
         $request->validate([
             'platform_mail_host'         => 'nullable|string|max:150',
             'platform_mail_port'         => 'nullable|integer',
@@ -191,6 +201,8 @@ class SettingsController extends Controller
 
     public function saveTemplate(Request $request): RedirectResponse
     {
+        $this->authorize('edit', PlatformSetting::class);
+
         $request->validate([
             'template_key' => 'required|string|in:welcome_school,subscription_expiry,trial_ending,invoice,password_reset',
             'subject'      => 'required|string|max:255',
@@ -211,6 +223,8 @@ class SettingsController extends Controller
 
     public function updateLocalization(Request $request): RedirectResponse
     {
+        $this->authorize('edit', PlatformSetting::class);
+
         $request->validate([
             'default_timezone' => 'nullable|string|max:60',
             'default_currency' => 'nullable|string|max:10',
@@ -234,6 +248,8 @@ class SettingsController extends Controller
 
     public function updateMaintenance(Request $request): RedirectResponse
     {
+        $this->authorize('edit', PlatformSetting::class);
+
         $request->validate([
             'maintenance_mode' => 'nullable|boolean',
             'maintenance_msg'  => 'nullable|string|max:500',
@@ -254,6 +270,8 @@ class SettingsController extends Controller
 
     public function updateStorage(Request $request): RedirectResponse
     {
+        $this->authorize('edit', PlatformSetting::class);
+
         $request->validate([
             'upload_max_mb'         => 'nullable|integer|min:1|max:500',
             'storage_per_school_gb' => 'nullable|integer|min:1|max:1000',
@@ -276,6 +294,8 @@ class SettingsController extends Controller
 
     public function updateAudit(Request $request): RedirectResponse
     {
+        $this->authorize('edit', PlatformSetting::class);
+
         $request->validate([
             'retention_days' => 'nullable|integer|min:7|max:3650',
         ]);

@@ -1,258 +1,351 @@
-import { useEffect } from 'react';
-import { router, usePage, useForm } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
+import { useForm, router } from '@inertiajs/react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
-import {
-    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import { Card, CardContent } from '@/components/ui/card';
-import { ClipboardList, CheckCircle2, XCircle, Clock, MinusCircle } from 'lucide-react';
-import type { SchoolClass, Section, Student, PageProps } from '@/Types';
-import { useAttendanceStore } from '@/Stores/useAttendanceStore';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CheckCircle2, UserCheck, Save, Send } from 'lucide-react';
 
-type AttendanceStatus = 'present' | 'absent' | 'late' | 'half_day';
-
-interface ExistingRecord { status: AttendanceStatus; remarks: string | null; }
-
-interface Props {
-    classes: SchoolClass[];
-    sections: Section[];
-    students: Student[];
-    existing: Record<number, ExistingRecord>;
-    filters: { date: string; class_id?: string; section_id?: string };
+interface StudentItem {
+    id: number;
+    first_name: string;
+    last_name: string;
+    admission_no?: string; admission_number?: string;
+    roll_no?: string;
+    gender: string;
+    section?: { id: number; name: string };
+    guardian_phone?: string;
 }
 
-const STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: string; icon: React.ElementType }[] = [
-    { value: 'present',  label: 'Present',  color: 'bg-green-100 text-green-700 border-green-300', icon: CheckCircle2 },
-    { value: 'absent',   label: 'Absent',   color: 'bg-red-100 text-red-700 border-red-300',       icon: XCircle      },
-    { value: 'late',     label: 'Late',     color: 'bg-amber-100 text-amber-700 border-amber-300', icon: Clock        },
-    { value: 'half_day', label: 'Half Day', color: 'bg-blue-100 text-blue-700 border-blue-300',    icon: MinusCircle  },
-];
+interface ExistingRecord {
+    attendable_id: number;
+    status: 'present' | 'absent' | 'late' | 'excused' | 'official_activity';
+    remarks?: string;
+    time_in?: string;
+    notification_sent?: boolean;
+}
 
-export default function AttendanceIndex({ classes, sections, students, existing, filters }: Props) {
-    const { flash } = usePage<PageProps>().props;
-    const { records, currentDate, currentClassId, currentSectionId,
-            setDate, setClassId, setSectionId, markStudent, markAll, initRecords } = useAttendanceStore();
+interface Props {
+    classes: { id: number; name: string }[];
+    sections: { id: number; class_id: number; name: string }[];
+    students: StudentItem[];
+    existing: Record<number, ExistingRecord>;
+    stats: {
+        total: number;
+        present: number;
+        absent: number;
+        late: number;
+        excused: number;
+    };
+    filters: {
+        date: string;
+        session: 'morning' | 'afternoon' | 'evening_dorm';
+        class_id: number | null;
+        section_id: number | null;
+    };
+}
 
-    // Sync store with page data
-    useEffect(() => {
-        setDate(filters.date);
-        if (filters.class_id)   setClassId(filters.class_id);
-        if (filters.section_id) setSectionId(filters.section_id ?? '');
-    }, []);
+export default function AttendanceIndex({ classes, sections, students, existing, stats, filters }: Props) {
+    const [date, setDate] = useState(filters.date || '');
+    const [session, setSession] = useState(filters.session || 'morning');
+    const [classId, setClassId] = useState<string>(filters.class_id ? String(filters.class_id) : '');
+    const [sectionId, setSectionId] = useState<string>(filters.section_id ? String(filters.section_id) : '');
+
+    const filteredSections = sections.filter((s) => !classId || s.class_id === Number(classId));
+
+    const { data, setData, post, processing } = useForm<{
+        date: string;
+        session: string;
+        class_id: number;
+        send_absence_sms: boolean;
+        records: {
+            student_id: number;
+            status: 'present' | 'absent' | 'late' | 'excused' | 'official_activity';
+            remarks: string;
+            time_in: string;
+        }[];
+    }>({
+        date: filters.date,
+        session: filters.session,
+        class_id: filters.class_id || 0,
+        send_absence_sms: true,
+        records: [],
+    });
 
     useEffect(() => {
         if (students.length > 0) {
-            initRecords(existing as Record<number, { status: AttendanceStatus; remarks: string | null }>, students.map(s => s.id));
+            const initialRecords = students.map((s) => {
+                const ex = existing[s.id];
+                return {
+                    student_id: s.id,
+                    status: ex ? ex.status : 'present',
+                    remarks: ex ? ex.remarks || '' : '',
+                    time_in: ex ? ex.time_in || '' : '',
+                };
+            });
+            setData('records', initialRecords);
         }
-    }, [students.length]);
+    }, [students, existing]);
 
-    function applyFilter(key: string, value: string) {
-        router.get('/school/attendance', { ...filters, [key]: value || undefined }, { preserveScroll: true });
+    function handleFilterSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        router.get('/school/attendance', {
+            date,
+            session,
+            class_id: classId || undefined,
+            section_id: sectionId || undefined,
+        }, { preserveState: true });
     }
 
-    const filteredSections = filters.class_id
-        ? sections.filter(s => s.class_id === Number(filters.class_id))
-        : [];
+    function setAllStatus(status: 'present' | 'absent') {
+        const updated = data.records.map((r) => ({ ...r, status }));
+        setData('records', updated);
+    }
 
-    const presentCount  = Object.values(records).filter(r => r.status === 'present').length;
-    const absentCount   = Object.values(records).filter(r => r.status === 'absent').length;
-    const lateCount     = Object.values(records).filter(r => r.status === 'late').length;
-    const halfDayCount  = Object.values(records).filter(r => r.status === 'half_day').length;
+    function updateStudentRow(studentId: number, field: string, value: any) {
+        const updated = data.records.map((r) => {
+            if (r.student_id === studentId) {
+                return { ...r, [field]: value };
+            }
+            return r;
+        });
+        setData('records', updated);
+    }
 
-    function handleSubmit() {
-        if (students.length === 0) return;
-
-        const recordsPayload = students.map(s => ({
-            student_id: s.id,
-            status:     records[s.id]?.status  ?? 'present',
-            remarks:    records[s.id]?.remarks ?? '',
-        }));
-
-        router.post('/school/attendance', {
-            date:     filters.date,
-            class_id: filters.class_id,
-            records:  recordsPayload,
-        }, { preserveScroll: true });
+    function submitAttendance(e: React.FormEvent) {
+        e.preventDefault();
+        setData('date', date);
+        setData('session', session);
+        setData('class_id', Number(classId));
+        post('/school/attendance');
     }
 
     return (
-        <AppLayout title="Attendance">
-            <div className="space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Student Attendance</h1>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Mark daily class-wise attendance</p>
-                    </div>
-                    <a href="/school/attendance/staff">
-                        <Button variant="outline" className="inline-flex items-center gap-2">
-                            <ClipboardList className="w-4 h-4" /> Staff Attendance
-                        </Button>
-                    </a>
+        <AppLayout title="Student Attendance Register">
+            <div className="max-w-7xl space-y-6 pb-16">
+                <div>
+                    <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                        <UserCheck className="w-5 h-5 text-emerald-600" />
+                        <span>Student Roll-Call Register</span>
+                    </h1>
+                    <p className="text-xs text-slate-500 mt-1">
+                        Conduct period-based roll-calls adhering to Kenyan MoE school custody rules and automated unnotified absence SMS dispatch.
+                    </p>
                 </div>
 
-                {flash?.success && (
-                    <div className="rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-300">
-                        {flash.success}
-                    </div>
-                )}
-
-                {/* Filters */}
-                <Card className="border-slate-200 dark:border-slate-800">
-                    <CardContent className="p-4">
-                        <div className="flex flex-wrap gap-3 items-end">
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Date</label>
-                                <Input
-                                    type="date"
-                                    className="w-44"
-                                    value={filters.date}
-                                    onChange={e => applyFilter('date', e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Class</label>
-                                <Select value={filters.class_id ?? ''} onValueChange={v => applyFilter('class_id', v)}>
-                                    <SelectTrigger className="w-40"><SelectValue placeholder="Select class" /></SelectTrigger>
-                                    <SelectContent>
-                                        {classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            {filteredSections.length > 0 && (
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Section</label>
-                                    <Select value={filters.section_id ?? ''} onValueChange={v => applyFilter('section_id', v)}>
-                                        <SelectTrigger className="w-36"><SelectValue placeholder="All sections" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="">All Sections</SelectItem>
-                                            {filteredSections.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            )}
+                {/* Filter Selector Bar */}
+                <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                    <form onSubmit={handleFilterSubmit} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+                        <div>
+                            <Label className="text-xs font-bold">Roll-Call Date</Label>
+                            <Input
+                                type="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                className="h-9 text-xs mt-1"
+                            />
                         </div>
-                    </CardContent>
-                </Card>
 
-                {/* Stats + bulk actions (only shown when students loaded) */}
+                        <div>
+                            <Label className="text-xs font-bold">Session Period</Label>
+                            <Select value={session} onValueChange={(v: any) => setSession(v)}>
+                                <SelectTrigger className="h-9 text-xs mt-1"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="morning">Morning Roll-Call (8:00 AM)</SelectItem>
+                                    <SelectItem value="afternoon">Afternoon Roll-Call (2:00 PM)</SelectItem>
+                                    <SelectItem value="evening_dorm">Evening Dormitory Check (9:00 PM)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div>
+                            <Label className="text-xs font-bold">Class / Grade *</Label>
+                            <Select value={classId} onValueChange={(v) => { setClassId(v); setSectionId(''); }}>
+                                <SelectTrigger className="h-9 text-xs mt-1"><SelectValue placeholder="Select Class" /></SelectTrigger>
+                                <SelectContent>
+                                    {classes.map((c) => (
+                                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div>
+                            <Label className="text-xs font-bold">Stream (Optional)</Label>
+                            <Select value={sectionId} onValueChange={setSectionId}>
+                                <SelectTrigger className="h-9 text-xs mt-1"><SelectValue placeholder="All Streams" /></SelectTrigger>
+                                <SelectContent>
+                                    {filteredSections.map((s) => (
+                                        <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <Button type="submit" className="h-9 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl">
+                            Load Register
+                        </Button>
+                    </form>
+                </div>
+
+                {/* Class Metric Overview */}
                 {students.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-4">
-                        <div className="flex gap-3 flex-wrap">
-                            {[
-                                { label: 'Present',  count: presentCount,  color: 'text-green-600' },
-                                { label: 'Absent',   count: absentCount,   color: 'text-red-600'   },
-                                { label: 'Late',     count: lateCount,     color: 'text-amber-600' },
-                                { label: 'Half Day', count: halfDayCount,  color: 'text-blue-600'  },
-                            ].map(({ label, count, color }) => (
-                                <div key={label} className="text-center">
-                                    <p className={`text-xl font-bold ${color}`}>{count}</p>
-                                    <p className="text-xs text-slate-400">{label}</p>
-                                </div>
-                            ))}
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                        <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-center">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Enrolled In Class</span>
+                            <p className="text-xl font-bold text-slate-900 mt-0.5">{stats.total}</p>
                         </div>
-                        <div className="ml-auto flex gap-2 flex-wrap">
-                            <span className="text-xs text-slate-400 self-center">Mark all as:</span>
-                            {STATUS_OPTIONS.map(({ value, label }) => (
-                                <Button key={value} variant="outline" size="sm" onClick={() => markAll(students.map(s => s.id), value)}>
-                                    {label}
-                                </Button>
-                            ))}
+                        <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200 text-center">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Present</span>
+                            <p className="text-xl font-bold text-emerald-700 mt-0.5">{stats.present}</p>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-red-50/60 border border-red-200 text-center">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-red-800">Absent</span>
+                            <p className="text-xl font-bold text-red-700 mt-0.5">{stats.absent}</p>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200 text-center">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Late Arrival</span>
+                            <p className="text-xl font-bold text-amber-700 mt-0.5">{stats.late}</p>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200 text-center">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800">Excused / Activity</span>
+                            <p className="text-xl font-bold text-blue-700 mt-0.5">{stats.excused}</p>
                         </div>
                     </div>
                 )}
 
-                {/* Table */}
-                {!filters.class_id ? (
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex items-center justify-center py-20">
-                        <div className="text-center">
-                            <ClipboardList className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-                            <p className="text-slate-500 dark:text-slate-400">Select a class and date to mark attendance</p>
-                        </div>
-                    </div>
-                ) : students.length === 0 ? (
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex items-center justify-center py-20">
-                        <p className="text-slate-400">No active students found in this class/section.</p>
-                    </div>
-                ) : (
-                    <>
-                        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-slate-50 dark:bg-slate-900">
-                                        <TableHead className="w-12">#</TableHead>
-                                        <TableHead>Student</TableHead>
-                                        <TableHead>Roll No</TableHead>
-                                        <TableHead>Section</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Remarks</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {students.map((student, idx) => {
-                                        const rec = records[student.id] ?? { status: 'present', remarks: '' };
-                                        const statusOpt = STATUS_OPTIONS.find(o => o.value === rec.status)!;
+                {/* Students Register Table */}
+                {students.length > 0 ? (
+                    <form onSubmit={submitAttendance} className="space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-700">Quick Mark All:</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setAllStatus('present')}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold hover:bg-emerald-200"
+                                >
+                                    All Present
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setAllStatus('absent')}
+                                    className="px-2.5 py-1 rounded-lg bg-red-100 text-red-800 font-bold hover:bg-red-200"
+                                >
+                                    All Absent
+                                </button>
+                            </div>
 
-                                        return (
-                                            <TableRow key={student.id} className={rec.status === 'absent' ? 'bg-red-50/50 dark:bg-red-950/10' : ''}>
-                                                <TableCell className="text-slate-400 text-sm">{idx + 1}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400 shrink-0">
-                                                            {student.first_name[0]}
+                            <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-700">
+                                <input
+                                    type="checkbox"
+                                    checked={data.send_absence_sms}
+                                    onChange={(e) => setData('send_absence_sms', e.target.checked)}
+                                    className="rounded border-slate-300 text-emerald-600"
+                                />
+                                <span>Send instant SMS to parent on unexcused absence</span>
+                            </label>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs">
+                                    <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] tracking-wider border-b border-slate-200">
+                                        <tr>
+                                            <th className="py-3 px-4">Adm No.</th>
+                                            <th className="py-3 px-4">Learner Full Name</th>
+                                            <th className="py-3 px-4">Stream</th>
+                                            <th className="py-3 px-4 text-center">Status Selection</th>
+                                            <th className="py-3 px-4">Arrival Time</th>
+                                            <th className="py-3 px-4">Remarks / Note</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 font-medium">
+                                        {students.map((s, idx) => {
+                                            const rec = data.records.find((r) => r.student_id === s.id) || {
+                                                student_id: s.id,
+                                                status: 'present',
+                                                remarks: '',
+                                                time_in: '',
+                                            };
+
+                                            return (
+                                                <tr key={s.id} className="hover:bg-slate-50/50">
+                                                    <td className="py-3 px-4 font-mono font-bold text-slate-700">
+                                                        {s.admission_no || s.admission_number || s.roll_no || '-'}
+                                                    </td>
+                                                    <td className="py-3 px-4">
+                                                        <div className="font-bold text-slate-900">{s.first_name} {s.last_name}</div>
+                                                        <div className="text-[10px] text-slate-400 font-mono">Guardian: {s.guardian_phone || 'N/A'}</div>
+                                                    </td>
+                                                    <td className="py-3 px-4 text-slate-600">
+                                                        {s.section?.name || 'Main Stream'}
+                                                    </td>
+                                                    <td className="py-3 px-4">
+                                                        <div className="flex items-center justify-center gap-1.5">
+                                                            {[
+                                                                { id: 'present', label: 'P', color: 'peer-checked:bg-emerald-600 peer-checked:text-white', title: 'Present' },
+                                                                { id: 'absent', label: 'A', color: 'peer-checked:bg-red-600 peer-checked:text-white', title: 'Absent' },
+                                                                { id: 'late', label: 'L', color: 'peer-checked:bg-amber-500 peer-checked:text-white', title: 'Late' },
+                                                                { id: 'excused', label: 'E', color: 'peer-checked:bg-blue-600 peer-checked:text-white', title: 'Excused / Medical' },
+                                                                { id: 'official_activity', label: 'OA', color: 'peer-checked:bg-purple-600 peer-checked:text-white', title: 'Official Activity' },
+                                                            ].map((opt) => (
+                                                                <label key={opt.id} className="cursor-pointer" title={opt.title}>
+                                                                    <input
+                                                                        type="radio"
+                                                                        name={`status_${s.id}`}
+                                                                        value={opt.id}
+                                                                        checked={rec.status === opt.id}
+                                                                        onChange={() => updateStudentRow(s.id, 'status', opt.id)}
+                                                                        className="sr-only peer"
+                                                                    />
+                                                                    <span className={`w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all ${opt.color}`}>
+                                                                        {opt.label}
+                                                                    </span>
+                                                                </label>
+                                                            ))}
                                                         </div>
-                                                        <span className="text-sm font-medium text-slate-900 dark:text-white">
-                                                            {student.first_name} {student.last_name}
-                                                        </span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-slate-500 text-sm">{student.roll_no ?? '—'}</TableCell>
-                                                <TableCell className="text-slate-500 text-sm">{student.section?.name ?? '—'}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex gap-1.5 flex-wrap">
-                                                        {STATUS_OPTIONS.map(opt => (
-                                                            <button
-                                                                key={opt.value}
-                                                                type="button"
-                                                                onClick={() => markStudent(student.id, opt.value)}
-                                                                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                                                                    rec.status === opt.value
-                                                                        ? opt.color + ' ring-2 ring-offset-1 ring-current'
-                                                                        : 'bg-slate-50 dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-700 hover:' + opt.color
-                                                                }`}
-                                                            >
-                                                                {opt.label}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Input
-                                                        className="h-7 text-xs w-36"
-                                                        placeholder="Remark..."
-                                                        value={rec.remarks}
-                                                        onChange={e => markStudent(student.id, rec.status, e.target.value)}
-                                                    />
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                </TableBody>
-                            </Table>
+                                                    </td>
+                                                    <td className="py-3 px-4">
+                                                        <Input
+                                                            type="time"
+                                                            value={rec.time_in}
+                                                            onChange={(e) => updateStudentRow(s.id, 'time_in', e.target.value)}
+                                                            className="h-8 text-xs font-mono w-28"
+                                                        />
+                                                    </td>
+                                                    <td className="py-3 px-4">
+                                                        <Input
+                                                            value={rec.remarks}
+                                                            onChange={(e) => updateStudentRow(s.id, 'remarks', e.target.value)}
+                                                            placeholder="Add observation..."
+                                                            className="h-8 text-xs"
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
-                        <div className="flex justify-end">
-                            <Button onClick={handleSubmit} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8">
-                                Save Attendance ({students.length} students)
+                        <div className="flex justify-end pt-2">
+                            <Button
+                                type="submit"
+                                disabled={processing}
+                                className="h-10 px-6 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl flex items-center gap-2"
+                            >
+                                <Save className="w-4 h-4" />
+                                <span>Save & Commit Roll-Call</span>
                             </Button>
                         </div>
-                    </>
+                    </form>
+                ) : (
+                    <div className="p-12 text-center rounded-2xl border border-slate-200 bg-white text-slate-400 text-xs">
+                        Select a Class and click "Load Register" to commence roll-call.
+                    </div>
                 )}
             </div>
         </AppLayout>

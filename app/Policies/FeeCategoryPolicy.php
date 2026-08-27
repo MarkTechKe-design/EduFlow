@@ -20,6 +20,11 @@ class FeeCategoryPolicy
         return $this->hasTenantContext($user) && $user->can('fees.structure');
     }
 
+    public function view(User $user, FeeCategory $category): bool
+    {
+        return $this->ownsTenantRecord($user, $category) && $user->can('fees.structure');
+    }
+
     public function update(User $user, FeeCategory $category): bool
     {
         return $this->ownsTenantRecord($user, $category) && $user->can('fees.structure');

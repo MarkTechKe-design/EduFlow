@@ -1,4 +1,4 @@
-﻿import { Head } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import MarketingLayout from '@/components/marketing/MarketingLayout';
 import HeroSection from '@/components/marketing/HeroSection';
 import ProductShowcase from '@/components/marketing/ProductShowcase';

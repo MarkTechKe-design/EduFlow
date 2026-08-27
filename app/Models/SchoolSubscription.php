@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\BelongsToSchool;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SchoolSubscription extends Model
 {
-    use SoftDeletes;
+    use BelongsToSchool, SoftDeletes;
 
     protected $fillable = [
         'school_id', 'package_id', 'billing_cycle', 'coupon_id', 'start_date', 'end_date', 'paystack_customer_code', 'paystack_authorization_code', 'card_last4', 'card_brand', 'card_exp_month', 'card_exp_year',
@@ -30,4 +32,6 @@ class SchoolSubscription extends Model
     public function school(): BelongsTo   { return $this->belongsTo(School::class); }
     public function package(): BelongsTo  { return $this->belongsTo(Package::class); }
     public function coupon(): BelongsTo   { return $this->belongsTo(Coupon::class); }
+    public function payments(): HasMany { return $this->hasMany(SubscriptionPayment::class, 'school_subscription_id'); }
+
 }

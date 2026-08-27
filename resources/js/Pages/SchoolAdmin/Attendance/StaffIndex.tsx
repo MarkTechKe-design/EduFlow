@@ -1,216 +1,279 @@
-import { useEffect } from 'react';
-import { router, usePage } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
+import { useForm, router } from '@inertiajs/react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
-import {
-    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, ClipboardList } from 'lucide-react';
-import { Link } from '@inertiajs/react';
-import type { Staff, Department, PageProps } from '@/Types';
-import { useAttendanceStore } from '@/Stores/useAttendanceStore';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Users, Save, CheckCircle2 } from 'lucide-react';
 
-type AttendanceStatus = 'present' | 'absent' | 'late' | 'half_day';
-
-interface ExistingRecord { status: AttendanceStatus; remarks: string | null; }
-
-interface Props {
-    staffList: Staff[];
-    existing: Record<number, ExistingRecord>;
-    departments: Department[];
-    filters: { date: string; department_id?: string };
+interface StaffItem {
+    id: number;
+    first_name: string;
+    last_name: string;
+    emp_id: string;
+    department_id?: number;
+    department?: { id: number; name: string };
+    designation?: { id: number; name: string };
 }
 
-const STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: string }[] = [
-    { value: 'present',  label: 'Present',  color: 'bg-green-100 text-green-700 border-green-300' },
-    { value: 'absent',   label: 'Absent',   color: 'bg-red-100 text-red-700 border-red-300'       },
-    { value: 'late',     label: 'Late',     color: 'bg-amber-100 text-amber-700 border-amber-300' },
-    { value: 'half_day', label: 'Half Day', color: 'bg-blue-100 text-blue-700 border-blue-300'    },
-];
+interface ExistingRecord {
+    attendable_id: number;
+    status: 'present' | 'absent' | 'late' | 'on_leave' | 'official_duty' | 'half_day';
+    time_in?: string;
+    time_out?: string;
+    remarks?: string;
+}
 
-export default function StaffAttendanceIndex({ staffList, existing, departments, filters }: Props) {
-    const { flash } = usePage<PageProps>().props;
-    const { records, markStudent, markAll, initRecords } = useAttendanceStore();
+interface ActiveLeaveItem {
+    id: number;
+    staff_id: number;
+    leaveType?: { id: number; name: string; code: string };
+}
+
+interface Props {
+    staffList: StaffItem[];
+    existing: Record<number, ExistingRecord>;
+    activeLeaves: Record<number, ActiveLeaveItem>;
+    departments: { id: number; name: string }[];
+    stats: {
+        total: number;
+        present: number;
+        absent: number;
+        late: number;
+        on_leave: number;
+    };
+    filters: {
+        date: string;
+        department_id: number | null;
+    };
+}
+
+export default function StaffIndex({ staffList, existing, activeLeaves, departments, stats, filters }: Props) {
+    const [date, setDate] = useState(filters.date || '');
+    const [departmentId, setDepartmentId] = useState<string>(filters.department_id ? String(filters.department_id) : '');
+
+    const { data, setData, post, processing } = useForm<{
+        date: string;
+        records: {
+            staff_id: number;
+            status: 'present' | 'absent' | 'late' | 'on_leave' | 'official_duty' | 'half_day';
+            time_in: string;
+            time_out: string;
+            remarks: string;
+        }[];
+    }>({
+        date: filters.date,
+        records: [],
+    });
 
     useEffect(() => {
         if (staffList.length > 0) {
-            initRecords(existing as Record<number, { status: AttendanceStatus; remarks: string | null }>, staffList.map(s => s.id));
+            const initial = staffList.map((st) => {
+                const ex = existing[st.id];
+                const isOnLeave = Boolean(activeLeaves[st.id]);
+                return {
+                    staff_id: st.id,
+                    status: ex ? ex.status : (isOnLeave ? 'on_leave' : 'present'),
+                    time_in: ex ? ex.time_in || '07:30' : '07:30',
+                    time_out: ex ? ex.time_out || '17:00' : '17:00',
+                    remarks: ex ? ex.remarks || '' : (isOnLeave ? `Approved ${activeLeaves[st.id].leaveType?.name || 'Leave'}` : ''),
+                };
+            });
+            setData('records', initial);
         }
-    }, [staffList.length]);
+    }, [staffList, existing, activeLeaves]);
 
-    function applyFilter(key: string, value: string) {
-        router.get('/school/attendance/staff', { ...filters, [key]: value || undefined }, { preserveScroll: true });
+    function handleFilter(e: React.FormEvent) {
+        e.preventDefault();
+        router.get('/school/attendance/staff', {
+            date,
+            department_id: departmentId || undefined,
+        }, { preserveState: true });
     }
 
-    function handleSubmit() {
-        if (staffList.length === 0) return;
-        const recordsPayload = staffList.map(s => ({
-            staff_id: s.id,
-            status:   records[s.id]?.status  ?? 'present',
-            remarks:  records[s.id]?.remarks ?? '',
-        }));
-        router.post('/school/attendance/staff', {
-            date:    filters.date,
-            records: recordsPayload,
-        }, { preserveScroll: true });
+    function updateStaffRow(staffId: number, field: string, value: any) {
+        const updated = data.records.map((r) => {
+            if (r.staff_id === staffId) {
+                return { ...r, [field]: value };
+            }
+            return r;
+        });
+        setData('records', updated);
     }
 
-    const presentCount = Object.values(records).filter(r => r.status === 'present').length;
-    const absentCount  = Object.values(records).filter(r => r.status === 'absent').length;
+    function submitStaffAttendance(e: React.FormEvent) {
+        e.preventDefault();
+        setData('date', date);
+        post('/school/attendance/staff');
+    }
 
     return (
-        <AppLayout title="Staff Attendance">
-            <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <Link href="/school/attendance" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white">
-                            <ArrowLeft className="w-4 h-4" /> Student Attendance
-                        </Link>
-                        <span className="text-slate-300 dark:text-slate-700">|</span>
+        <AppLayout title="Staff Daily Attendance & Duty Clock-in">
+            <div className="max-w-7xl space-y-6 pb-16">
+                <div>
+                    <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                        <Users className="w-5 h-5 text-emerald-600" />
+                        <span>Staff Daily Attendance & Duty Clock-in</span>
+                    </h1>
+                    <p className="text-xs text-slate-500 mt-1">
+                        Track teacher clock-in hours, official duty assignments (ODS), and cross-referenced leave records.
+                    </p>
+                </div>
+
+                {/* Filter Toolbar */}
+                <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                    <form onSubmit={handleFilter} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
                         <div>
-                            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Staff Attendance</h1>
+                            <Label className="text-xs font-bold">Duty Date</Label>
+                            <Input
+                                type="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                className="h-9 text-xs mt-1"
+                            />
                         </div>
+
+                        <div>
+                            <Label className="text-xs font-bold">Department Filter</Label>
+                            <Select value={departmentId} onValueChange={setDepartmentId}>
+                                <SelectTrigger className="h-9 text-xs mt-1"><SelectValue placeholder="All Departments" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Departments</SelectItem>
+                                    {departments.map((d) => (
+                                        <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <Button type="submit" className="h-9 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl">
+                            Load Staff List
+                        </Button>
+                    </form>
+                </div>
+
+                {/* Staff KPI Header */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-center">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Staff</span>
+                        <p className="text-xl font-bold text-slate-900 mt-0.5">{stats.total}</p>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200 text-center">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Present (On Duty)</span>
+                        <p className="text-xl font-bold text-emerald-700 mt-0.5">{stats.present}</p>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-red-50/60 border border-red-200 text-center">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-red-800">Absent (AWOP)</span>
+                        <p className="text-xl font-bold text-red-700 mt-0.5">{stats.absent}</p>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200 text-center">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Late Reporting</span>
+                        <p className="text-xl font-bold text-amber-700 mt-0.5">{stats.late}</p>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200 text-center">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800">Approved Leave</span>
+                        <p className="text-xl font-bold text-blue-700 mt-0.5">{stats.on_leave}</p>
                     </div>
                 </div>
 
-                {flash?.success && (
-                    <div className="rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-300">
-                        {flash.success}
-                    </div>
-                )}
+                {/* Staff Roster Table */}
+                <form onSubmit={submitStaffAttendance} className="space-y-4">
+                    <div className="rounded-2xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] tracking-wider border-b border-slate-200">
+                                    <tr>
+                                        <th className="py-3 px-4">Staff Member</th>
+                                        <th className="py-3 px-4">Role / Department</th>
+                                        <th className="py-3 px-4">Attendance Status</th>
+                                        <th className="py-3 px-4">Clock In</th>
+                                        <th className="py-3 px-4">Clock Out</th>
+                                        <th className="py-3 px-4">Remarks / Duty Station</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 font-medium">
+                                    {staffList.map((st) => {
+                                        const rec = data.records.find((r) => r.staff_id === st.id) || {
+                                            staff_id: st.id,
+                                            status: 'present',
+                                            time_in: '07:30',
+                                            time_out: '17:00',
+                                            remarks: '',
+                                        };
+                                        const isOnLeave = Boolean(activeLeaves[st.id]);
 
-                {/* Filters */}
-                <Card className="border-slate-200 dark:border-slate-800">
-                    <CardContent className="p-4">
-                        <div className="flex flex-wrap gap-3 items-end">
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Date</label>
-                                <Input
-                                    type="date"
-                                    className="w-44"
-                                    value={filters.date}
-                                    onChange={e => applyFilter('date', e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Department</label>
-                                <Select value={filters.department_id ?? ''} onValueChange={v => applyFilter('department_id', v)}>
-                                    <SelectTrigger className="w-48"><SelectValue placeholder="All Departments" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="">All Departments</SelectItem>
-                                        {departments.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {staffList.length > 0 && (
-                    <div className="flex items-center gap-6">
-                        <div className="flex gap-4">
-                            <div className="text-center">
-                                <p className="text-xl font-bold text-green-600">{presentCount}</p>
-                                <p className="text-xs text-slate-400">Present</p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-xl font-bold text-red-600">{absentCount}</p>
-                                <p className="text-xs text-slate-400">Absent</p>
-                            </div>
-                        </div>
-                        <div className="ml-auto flex gap-2 flex-wrap">
-                            <span className="text-xs text-slate-400 self-center">Mark all:</span>
-                            {STATUS_OPTIONS.map(({ value, label }) => (
-                                <Button key={value} variant="outline" size="sm" onClick={() => markAll(staffList.map(s => s.id), value)}>
-                                    {label}
-                                </Button>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {staffList.length === 0 ? (
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex items-center justify-center py-20">
-                        <div className="text-center">
-                            <ClipboardList className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-                            <p className="text-slate-500">No active staff found.</p>
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-slate-50 dark:bg-slate-900">
-                                        <TableHead>#</TableHead>
-                                        <TableHead>Staff Member</TableHead>
-                                        <TableHead>Emp ID</TableHead>
-                                        <TableHead>Department</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Remarks</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {staffList.map((s, idx) => {
-                                        const rec = records[s.id] ?? { status: 'present', remarks: '' };
                                         return (
-                                            <TableRow key={s.id} className={rec.status === 'absent' ? 'bg-red-50/50 dark:bg-red-950/10' : ''}>
-                                                <TableCell className="text-slate-400 text-sm">{idx + 1}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400 shrink-0">
-                                                            {s.first_name[0]}
-                                                        </div>
-                                                        <span className="text-sm font-medium text-slate-900 dark:text-white">{s.full_name}</span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="font-mono text-xs text-slate-400">{s.emp_id}</TableCell>
-                                                <TableCell className="text-slate-500 text-sm">{s.department?.name ?? '—'}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex gap-1.5 flex-wrap">
-                                                        {STATUS_OPTIONS.map(opt => (
-                                                            <button
-                                                                key={opt.value}
-                                                                type="button"
-                                                                onClick={() => markStudent(s.id, opt.value as AttendanceStatus)}
-                                                                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                                                                    rec.status === opt.value
-                                                                        ? opt.color + ' ring-2 ring-offset-1 ring-current'
-                                                                        : 'bg-slate-50 dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-700'
-                                                                }`}
-                                                            >
-                                                                {opt.label}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
+                                            <tr key={st.id} className="hover:bg-slate-50/50">
+                                                <td className="py-3 px-4">
+                                                    <div className="font-bold text-slate-900">{st.first_name} {st.last_name}</div>
+                                                    <div className="text-[10px] text-slate-400 font-mono">EMP: {st.emp_id}</div>
+                                                </td>
+                                                <td className="py-3 px-4">
+                                                    <div className="text-slate-700 font-medium">{st.designation?.name || 'Staff'}</div>
+                                                    <div className="text-[10px] text-slate-400">{st.department?.name || 'General'}</div>
+                                                </td>
+                                                <td className="py-3 px-4">
+                                                    <Select
+                                                        value={rec.status}
+                                                        onValueChange={(v: any) => updateStaffRow(st.id, 'status', v)}
+                                                    >
+                                                        <SelectTrigger className="h-8 text-xs w-44">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="present">Present (On Duty)</SelectItem>
+                                                            <SelectItem value="late">Late Arrival</SelectItem>
+                                                            <SelectItem value="absent">Absent Without Leave</SelectItem>
+                                                            <SelectItem value="on_leave">On Approved Leave</SelectItem>
+                                                            <SelectItem value="official_duty">Official Duty (ODS)</SelectItem>
+                                                            <SelectItem value="half_day">Half Day Duty</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </td>
+                                                <td className="py-3 px-4">
                                                     <Input
-                                                        className="h-7 text-xs w-36"
-                                                        placeholder="Remark..."
-                                                        value={rec.remarks}
-                                                        onChange={e => markStudent(s.id, rec.status as AttendanceStatus, e.target.value)}
+                                                        type="time"
+                                                        value={rec.time_in}
+                                                        onChange={(e) => updateStaffRow(st.id, 'time_in', e.target.value)}
+                                                        className="h-8 text-xs font-mono w-28"
                                                     />
-                                                </TableCell>
-                                            </TableRow>
+                                                </td>
+                                                <td className="py-3 px-4">
+                                                    <Input
+                                                        type="time"
+                                                        value={rec.time_out}
+                                                        onChange={(e) => updateStaffRow(st.id, 'time_out', e.target.value)}
+                                                        className="h-8 text-xs font-mono w-28"
+                                                    />
+                                                </td>
+                                                <td className="py-3 px-4">
+                                                    <Input
+                                                        value={rec.remarks}
+                                                        onChange={(e) => updateStaffRow(st.id, 'remarks', e.target.value)}
+                                                        placeholder="Notes, workshop name..."
+                                                        className="h-8 text-xs"
+                                                    />
+                                                </td>
+                                            </tr>
                                         );
                                     })}
-                                </TableBody>
-                            </Table>
+                                </tbody>
+                            </table>
                         </div>
+                    </div>
 
-                        <div className="flex justify-end">
-                            <Button onClick={handleSubmit} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8">
-                                Save Attendance ({staffList.length} staff)
-                            </Button>
-                        </div>
-                    </>
-                )}
+                    <div className="flex justify-end pt-2">
+                        <Button
+                            type="submit"
+                            disabled={processing}
+                            className="h-10 px-6 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl flex items-center gap-2"
+                        >
+                            <Save className="w-4 h-4" />
+                            <span>Save Staff Attendance</span>
+                        </Button>
+                    </div>
+                </form>
             </div>
         </AppLayout>
     );

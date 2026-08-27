@@ -86,6 +86,7 @@ export interface Student {
     admission_no: string;
     roll_no: string | null;
     first_name: string;
+    middle_name?: string | null;
     last_name: string | null;
     full_name: string;
     gender: 'male' | 'female' | 'other';
@@ -104,6 +105,7 @@ export interface Student {
     previous_school: string | null;
     created_at: string;
     school_class?: SchoolClass;
+    enrollments?: StudentEnrollment[];
     section?: Section;
     guardian?: Guardian;
     documents?: StudentDocument[];
@@ -129,6 +131,7 @@ export interface Section {
     name: string;
     capacity: number;
     school_class?: SchoolClass;
+    enrollments?: StudentEnrollment[];
 }
 
 export interface Subject {
@@ -141,6 +144,7 @@ export interface Subject {
     full_marks: number;
     pass_marks: number;
     school_class?: SchoolClass;
+    enrollments?: StudentEnrollment[];
 }
 
 export interface Shift {
@@ -176,6 +180,7 @@ export interface Timetable {
     subject?: Subject;
     teacher?: Staff;
     school_class?: SchoolClass;
+    enrollments?: StudentEnrollment[];
     section?: Section;
 }
 
@@ -232,6 +237,7 @@ export interface Staff {
     designation_id: number | null;
     emp_id: string;
     first_name: string;
+    middle_name?: string | null;
     last_name: string | null;
     full_name: string;
     gender: 'male' | 'female' | 'other';
@@ -272,3 +278,125 @@ export type PaginatedResponse<T> = {
         next: string | null;
     };
 };
+
+export interface StudentEnrollment {
+    id: number;
+    school_id: number;
+    student_id: number;
+    academic_year_id?: number | null;
+    academic_year: string;
+    term: string;
+    class_id: number;
+    section_id?: number | null;
+    roll_no?: string | null;
+    status: 'active' | 'promoted' | 'repeated' | 'transferred_out' | 'completed';
+    start_date?: string | null;
+    end_date?: string | null;
+    remarks?: string | null;
+    created_at?: string;
+    updated_at?: string;
+    school_class?: SchoolClass;
+    enrollments?: StudentEnrollment[];
+    section?: Section;
+    academic_year_relation?: AcademicYear;
+}
+
+export interface Guardian {
+    id: number;
+    school_id: number;
+    user_id?: number | null;
+    name: string;
+    relation?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    occupation?: string | null;
+    address?: string | null;
+    photo?: string | null;
+    created_at?: string;
+}
+
+export interface StudentGuardian {
+    id: number;
+    school_id: number;
+    student_id: number;
+    guardian_id: number;
+    relationship_type: string;
+    is_primary: boolean;
+    has_legal_custody: boolean;
+    receives_sms_notifications: boolean;
+    receives_report_cards: boolean;
+    emergency_priority: number;
+    guardian?: Guardian;
+}
+
+export interface StudentMedicalProfile {
+    id: number;
+    school_id: number;
+    student_id: number;
+    blood_group?: string | null;
+    allergies?: string | null;
+    chronic_conditions?: string | null;
+    emergency_medication?: string | null;
+    dietary_restrictions?: string | null;
+    sha_nhif_no?: string | null;
+    preferred_hospital?: string | null;
+    doctor_name?: string | null;
+    doctor_phone?: string | null;
+    special_instructions?: string | null;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export type PerformanceLevel = 'EE' | 'ME' | 'AE' | 'BE';
+
+export interface AssessmentStrand {
+    id: number;
+    school_id: number;
+    cbc_assessment_id: number;
+    strand_name: string;
+    sub_strand?: string | null;
+    specific_learning_outcome?: string | null;
+    sort_order: number;
+    created_at?: string;
+}
+
+export interface AssessmentScore {
+    id: number;
+    school_id: number;
+    cbc_assessment_id: number;
+    assessment_strand_id: number;
+    student_id: number;
+    performance_level: PerformanceLevel;
+    numeric_score: number;
+    teacher_comments?: string | null;
+    student?: Student;
+    strand?: AssessmentStrand;
+}
+
+export interface CbcAssessment {
+    id: number;
+    school_id: number;
+    academic_year_id: number;
+    term: string;
+    class_id: number;
+    section_id?: number | null;
+    subject_id: number;
+    title: string;
+    type: 'formative_task' | 'summative_term' | 'project_work' | 'knec_cba';
+    assessment_date: string;
+    description?: string | null;
+    status: string;
+    created_by?: number | null;
+    created_at?: string;
+    academic_year?: AcademicYear;
+    school_class?: SchoolClass;
+    section?: Section;
+    subject?: {
+        id: number;
+        name: string;
+        code?: string | null;
+    };
+    strands?: AssessmentStrand[];
+    strands_count?: number;
+    scores_count?: number;
+}

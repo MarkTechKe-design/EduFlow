@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" suppressHydrationWarning>
     <head>
         <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -18,6 +18,9 @@
             $configuredFavicon = app(\App\Services\WebsiteContentService::class)->branding()['favicon_url'] ?? null;
         @endphp
         <link id="app-favicon" rel="icon" type="image/svg+xml" href="{{ $configuredFavicon ?: asset('favicon.svg') }}" />
+        <script type="text/javascript">
+            window.Ziggy = @json((new \Tighten\Ziggy\Ziggy)->toArray());
+        </script>
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.tsx'])
         @inertiaHead

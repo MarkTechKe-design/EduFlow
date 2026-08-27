@@ -30,15 +30,15 @@ class SecurityHeadersMiddleware
         // Content Security Policy (CSP)
         // Permits Inertia/Vite local assets, Bunny fonts, and YouTube video embeds while blocking unsafe execution
         $csp = "default-src 'self'; " .
-               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.bunny.net; " .
+               "script-src 'self' https://js.paystack.co https://fonts.bunny.net; " .
                "style-src 'self' 'unsafe-inline' https://fonts.bunny.net; " .
                "font-src 'self' https://fonts.bunny.net data:; " .
                "img-src 'self' data: https: blob:; " .
                "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com; " .
-               "connect-src 'self' ws: wss:; " .
+               "connect-src 'self' https://api.paystack.co ws: wss:; " .
                "object-src 'none'; " .
                "base-uri 'self'; " .
-               "form-action 'self';";
+               "form-action 'self'; frame-ancestors 'self';";
 
         $response->headers->set('Content-Security-Policy', $csp);
         $response->headers->set('Cross-Origin-Opener-Policy', 'same-origin');

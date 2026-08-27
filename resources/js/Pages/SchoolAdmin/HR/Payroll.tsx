@@ -1,218 +1,628 @@
-import { useState } from 'react';
-import { router, usePage, Link } from '@inertiajs/react';
+import React, { useState } from 'react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardContent } from '@/components/ui/card';
-import { DollarSign, Zap, Settings2, CheckCircle2, Clock } from 'lucide-react';
-import type { PageProps, PaginatedResponse } from '@/Types';
+import type { PageProps, PaginatedData } from '@/Types';
+import { Button } from '@/Components/ui/button';
+import { Input } from '@/Components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/Components/ui/select';
+import { formatDate } from '@/lib/utils';
+import {
+    AlertCircle,
+    Building2,
+    CheckCircle2,
+    Clock,
+    CreditCard,
+    DollarSign,
+    Download,
+    Eye,
+    FileSpreadsheet,
+    FileText,
+    Filter,
+    Play,
+    Printer,
+    Receipt,
+    RefreshCw,
+    Save,
+    Settings2,
+    Shield,
+    ShieldCheck,
+    Sliders,
+    Users
+} from 'lucide-react';
 
-interface Department { id: number; name: string; }
-interface PayrollRow {
-    id: number; staff_id: number; month_year: string; basic_salary: string;
-    total_allowances: string; total_deductions: string; net_salary: string;
-    present_days: number; working_days: number; leave_days: number; status: string; paid_on: string | null;
-    staff?: { first_name: string; last_name: string | null; emp_id: string; department?: { name: string } };
+interface PayrollRecord {
+    id: number;
+    month_year: string;
+    basic_salary: number;
+    total_allowances: number;
+    total_deductions: number;
+    net_salary: number;
+    working_days: number;
+    present_days: number;
+    leave_days: number;
+    status: 'draft' | 'generated' | 'paid';
+    paid_on?: string | null;
+    deductions_snapshot?: Array<{ label: string; amount: number; code?: string; type?: string }> | null;
+    staff?: {
+        id: number;
+        first_name: string;
+        last_name: string;
+        emp_id?: string | null;
+        department?: { id: number; name: string } | null;
+        designation?: { id: number; name: string } | null;
+    } | null;
 }
-interface Stats { total_net: number; paid_count: number; draft_count: number; }
 
-interface Props {
-    payrolls: PaginatedResponse<PayrollRow>;
-    departments: Department[];
-    filters: { month_year?: string; department_id?: string; status?: string };
-    stats: Stats;
+interface StatutoryConfig {
+    id: number;
+    nssf_enabled: boolean;
+    nssf_rate: number;
+    nssf_tier1_limit: number;
+    nssf_tier2_limit: number;
+    shif_enabled: boolean;
+    shif_rate: number;
+    shif_min_amount: number;
+    housing_levy_enabled: boolean;
+    housing_levy_rate: number;
+    paye_enabled: boolean;
+    paye_brackets: Array<{ limit: number | null; rate: number }>;
+    personal_relief: number;
+    shif_relief_rate: number;
+    housing_relief_rate: number;
 }
 
-const STATUS_STYLE: Record<string, string> = {
-    draft:     'bg-slate-100 text-slate-600',
-    generated: 'bg-blue-100 text-blue-700',
-    paid:      'bg-green-100 text-green-700',
-};
+interface Props extends PageProps {
+    payrolls: PaginatedData<PayrollRecord>;
+    departments: Array<{ id: number; name: string }>;
+    statutoryConfig: StatutoryConfig;
+    filters: {
+        month_year?: string;
+        department_id?: string;
+        status?: string;
+    };
+    stats: {
+        total_net: number;
+        paid_count: number;
+        draft_count: number;
+    };
+}
 
-export default function PayrollPage({ payrolls, departments, filters, stats }: Props) {
-    const { flash } = usePage<PageProps>().props;
-    const [genOpen, setGenOpen] = useState(false);
-    const [genForm, setGenForm] = useState({ month_year: new Date().toISOString().slice(0, 7), department_id: '', working_days: '26' });
-    const [generating, setGenerating] = useState(false);
+export default function PayrollIndex({ auth, payrolls, departments, statutoryConfig, filters, stats }: Props) {
+    const [monthYear, setMonthYear] = useState(filters.month_year || new Date().toISOString().slice(0, 7));
+    const [departmentId, setDepartmentId] = useState(filters.department_id || 'all');
+    const [status, setStatus] = useState(filters.status || 'all');
 
-    function applyFilter(key: string, value: string) {
-        router.get('/school/hr/payroll', { ...filters, [key]: value || undefined }, { preserveScroll: true });
-    }
+    // Modals
+    const [generateModalOpen, setGenerateModalOpen] = useState(false);
+    const [configModalOpen, setConfigModalOpen] = useState(false);
 
-    function handleGenerate() {
-        setGenerating(true);
-        router.post('/school/hr/payroll/generate', genForm, {
-            preserveScroll: true,
-            onSuccess: () => { setGenOpen(false); setGenerating(false); },
-            onError: () => setGenerating(false),
+    // Batch Payroll Generation Form
+    const genForm = useForm({
+        month_year: monthYear,
+        department_id: '',
+        working_days: 26,
+    });
+
+    // Statutory Settings Form
+    const statForm = useForm({
+        nssf_enabled: statutoryConfig?.nssf_enabled ?? true,
+        nssf_rate: statutoryConfig?.nssf_rate ?? 6.00,
+        nssf_tier1_limit: statutoryConfig?.nssf_tier1_limit ?? 8000.00,
+        nssf_tier2_limit: statutoryConfig?.nssf_tier2_limit ?? 72000.00,
+        shif_enabled: statutoryConfig?.shif_enabled ?? true,
+        shif_rate: statutoryConfig?.shif_rate ?? 2.75,
+        shif_min_amount: statutoryConfig?.shif_min_amount ?? 300.00,
+        housing_levy_enabled: statutoryConfig?.housing_levy_enabled ?? true,
+        housing_levy_rate: statutoryConfig?.housing_levy_rate ?? 1.50,
+        paye_enabled: statutoryConfig?.paye_enabled ?? true,
+        paye_brackets: statutoryConfig?.paye_brackets ?? [
+            { limit: 24000.00, rate: 10.00 },
+            { limit: 8333.33, rate: 25.00 },
+            { limit: 467666.67, rate: 30.00 },
+            { limit: 300000.00, rate: 32.50 },
+            { limit: null, rate: 35.00 },
+        ],
+        personal_relief: statutoryConfig?.personal_relief ?? 2400.00,
+        shif_relief_rate: statutoryConfig?.shif_relief_rate ?? 15.00,
+        housing_relief_rate: statutoryConfig?.housing_relief_rate ?? 15.00,
+    });
+
+    const handleFilter = (e: React.FormEvent) => {
+        e.preventDefault();
+        router.get(
+            '/school/hr/payroll',
+            {
+                month_year: monthYear,
+                department_id: departmentId === 'all' ? undefined : departmentId,
+                status: status === 'all' ? undefined : status,
+            },
+            { preserveState: true, replace: true }
+        );
+    };
+
+    const handleGenerate = (e: React.FormEvent) => {
+        e.preventDefault();
+        genForm.post('/school/hr/payroll/generate', {
+            onSuccess: () => setGenerateModalOpen(false),
         });
-    }
+    };
 
-    function markPaid(p: PayrollRow) {
-        if (!confirm(`Mark payroll for ${p.staff?.first_name} ${p.staff?.last_name} as paid?`)) return;
-        router.put(`/school/hr/payroll/${p.id}/paid`, {}, { preserveScroll: true });
-    }
+    const handleSaveStatutory = (e: React.FormEvent) => {
+        e.preventDefault();
+        statForm.post('/school/hr/payroll/statutory-settings', {
+            onSuccess: () => setConfigModalOpen(false),
+        });
+    };
+
+    const handleMarkPaid = (id: number) => {
+        if (confirm('Mark this payroll record as disbursed/paid?')) {
+            router.put(`/school/hr/payroll/${id}/paid`);
+        }
+    };
 
     return (
-        <AppLayout title="Payroll">
-            <div className="space-y-6">
-                <div className="flex items-center justify-between">
+        <AppLayout header="Staff Payroll & Statutory Remittance Engine">
+            <Head title="Staff Payroll - EduFlow" />
+
+            <div className="max-w-7xl mx-auto space-y-6 pb-16">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Payroll</h1>
-                        <p className="text-sm text-slate-500 mt-0.5">{payrolls.meta?.total ?? 0} payroll records</p>
+                        <div className="flex items-center gap-2">
+                            <Receipt className="w-5 h-5 text-indigo-600" />
+                            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+                                Staff Payroll & Kenya Statutory Engine
+                            </h1>
+                            <span className="inline-flex items-center text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-semibold">
+                                <ShieldCheck className="w-3 h-3 mr-1" /> KRA / SHIF / NSSF Automated
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                            Automated monthly salary computation, attendance proration, and statutory deduction schedules.
+                        </p>
                     </div>
-                    <div className="flex gap-2">
-                        <Link href="/school/hr/salary-structure">
-                            <Button variant="outline" className="inline-flex items-center gap-2"><Settings2 className="w-4 h-4" /> Salary Structure</Button>
-                        </Link>
-                        <Button onClick={() => setGenOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white inline-flex items-center gap-2">
-                            <Zap className="w-4 h-4" /> Generate Payroll
+
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            onClick={() => setConfigModalOpen(true)}
+                            size="sm"
+                            variant="outline"
+                            className="h-9 text-xs font-semibold"
+                        >
+                            <Sliders className="w-3.5 h-3.5 mr-1.5" />
+                            Statutory & Tax Rules
+                        </Button>
+
+                        <Button
+                            type="button"
+                            onClick={() => setGenerateModalOpen(true)}
+                            size="sm"
+                            className="h-9 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                        >
+                            <Play className="w-3.5 h-3.5 mr-1.5" />
+                            Generate Monthly Payroll
                         </Button>
                     </div>
                 </div>
 
-                {flash?.success && (
-                    <div className="rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{flash.success}</div>
-                )}
+                {/* Summary Metrics */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
+                        <div className="text-xs font-medium text-slate-500">Total Net Remittance</div>
+                        <div className="text-xl font-bold font-mono text-slate-900 dark:text-white mt-1">
+                            KSh {Number(stats.total_net).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </div>
+                        <div className="text-[11px] text-indigo-600 font-semibold mt-1">Period: {monthYear}</div>
+                    </div>
 
-                {/* Stats */}
-                <div className="grid grid-cols-3 gap-4 max-w-lg">
-                    {[
-                        { label: 'Net Payable', value: `KSh ${stats.total_net?.toLocaleString() ?? 0}`, color: 'text-indigo-600', icon: DollarSign },
-                        { label: 'Paid', value: stats.paid_count, color: 'text-green-600', icon: CheckCircle2 },
-                        { label: 'Pending', value: stats.draft_count, color: 'text-amber-600', icon: Clock },
-                    ].map(({ label, value, color, icon: Icon }) => (
-                        <Card key={label} className="border-slate-200 dark:border-slate-800">
-                            <CardContent className="p-4 flex items-center gap-3">
-                                <Icon className={`w-5 h-5 ${color}`} />
-                                <div>
-                                    <p className={`text-xl font-bold ${color}`}>{value}</p>
-                                    <p className="text-xs text-slate-500">{label}</p>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
+                        <div className="text-xs font-medium text-emerald-600 font-semibold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Disbursed Salaries
+                        </div>
+                        <div className="text-xl font-bold font-mono text-slate-900 dark:text-white mt-1">
+                            {stats.paid_count} Staff
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-1">Settled to bank accounts</div>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
+                        <div className="text-xs font-medium text-amber-600 font-semibold flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" /> Pending Disbursal
+                        </div>
+                        <div className="text-xl font-bold font-mono text-slate-900 dark:text-white mt-1">
+                            {stats.draft_count} Staff
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-1">Calculated & ready</div>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+                        <div className="text-xs font-medium text-slate-500">Salary Structures</div>
+                        <Link
+                            href="/school/hr/salary-structure"
+                            className="inline-flex items-center text-xs font-bold text-indigo-600 hover:text-indigo-700"
+                        >
+                            Manage Base Salaries &rarr;
+                        </Link>
+                        <div className="text-[10px] text-slate-400">163 Active Staff Members</div>
+                    </div>
                 </div>
 
-                {/* Filters */}
-                <div className="flex gap-3 flex-wrap">
-                    <Input
-                        type="month"
-                        className="w-40"
-                        value={filters.month_year ?? ''}
-                        onChange={e => applyFilter('month_year', e.target.value)}
-                    />
-                    <Select value={filters.department_id ?? ''} onValueChange={v => applyFilter('department_id', v)}>
-                        <SelectTrigger className="w-44"><SelectValue placeholder="All Departments" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="">All Departments</SelectItem>
-                            {departments.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <Select value={filters.status ?? ''} onValueChange={v => applyFilter('status', v)}>
-                        <SelectTrigger className="w-36"><SelectValue placeholder="All Status" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="">All Status</SelectItem>
-                            <SelectItem value="draft">Draft</SelectItem>
-                            <SelectItem value="generated">Generated</SelectItem>
-                            <SelectItem value="paid">Paid</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
+                {/* Filter Workspace */}
+                <form onSubmit={handleFilter} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div>
+                        <label className="text-xs font-bold block mb-1">Payroll Period:</label>
+                        <Input
+                            type="month"
+                            value={monthYear}
+                            onChange={(e) => setMonthYear(e.target.value)}
+                            className="h-9 text-xs font-mono"
+                        />
+                    </div>
 
-                {/* Table */}
-                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-x-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="bg-slate-50 dark:bg-slate-900">
-                                <TableHead>Staff</TableHead>
-                                <TableHead>Month</TableHead>
-                                <TableHead className="text-right">Basic</TableHead>
-                                <TableHead className="text-right">Allowances</TableHead>
-                                <TableHead className="text-right">Deductions</TableHead>
-                                <TableHead className="text-right">Net Salary</TableHead>
-                                <TableHead className="text-center">Days</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="w-28"></TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {payrolls.data.length === 0 ? (
-                                <TableRow><TableCell colSpan={9} className="text-center py-16 text-slate-400">No payroll records. Generate payroll first.</TableCell></TableRow>
-                            ) : payrolls.data.map(p => (
-                                <TableRow key={p.id}>
-                                    <TableCell>
-                                        <p className="font-medium text-sm text-slate-900 dark:text-white">{p.staff?.first_name} {p.staff?.last_name}</p>
-                                        <p className="text-xs text-slate-400">{p.staff?.emp_id} · {p.staff?.department?.name}</p>
-                                    </TableCell>
-                                    <TableCell className="text-sm text-slate-600 dark:text-slate-400">{p.month_year}</TableCell>
-                                    <TableCell className="text-right text-sm">KSh {Number(p.basic_salary).toLocaleString()}</TableCell>
-                                    <TableCell className="text-right text-sm text-green-600">KSh {Number(p.total_allowances).toLocaleString()}</TableCell>
-                                    <TableCell className="text-right text-sm text-red-600">KSh {Number(p.total_deductions).toLocaleString()}</TableCell>
-                                    <TableCell className="text-right font-bold text-indigo-600">KSh {Number(p.net_salary).toLocaleString()}</TableCell>
-                                    <TableCell className="text-center text-sm text-slate-500">{p.present_days}/{p.working_days}</TableCell>
-                                    <TableCell>
-                                        <Badge className={`border-0 text-xs capitalize ${STATUS_STYLE[p.status] ?? ''}`}>{p.status}</Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex gap-1">
-                                            <Link href={`/school/hr/payroll/${p.id}/slip`}>
-                                                <Button size="sm" variant="outline" className="text-xs h-7">Slip</Button>
-                                            </Link>
-                                            {p.status !== 'paid' && (
-                                                <Button size="sm" className="text-xs h-7 bg-green-600 hover:bg-green-700 text-white" onClick={() => markPaid(p)}>
-                                                    Mark Paid
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                    <div>
+                        <label className="text-xs font-bold block mb-1">Department:</label>
+                        <Select value={departmentId} onValueChange={setDepartmentId}>
+                            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="All Departments" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Departments</SelectItem>
+                                {departments.map((d) => (
+                                    <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold block mb-1">Disbursal Status:</label>
+                        <Select value={status} onValueChange={setStatus}>
+                            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Records</SelectItem>
+                                <SelectItem value="generated">Generated / Draft</SelectItem>
+                                <SelectItem value="paid">Paid / Disbursed</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="flex items-end">
+                        <Button type="submit" size="sm" className="h-9 text-xs bg-slate-900 hover:bg-slate-800 text-white font-bold w-full">
+                            <Filter className="w-3.5 h-3.5 mr-1" />
+                            Filter Payroll Ledger
+                        </Button>
+                    </div>
+                </form>
+
+                {/* Payroll Ledger Table */}
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                            <thead>
+                                <tr className="border-b bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider">
+                                    <th className="py-3 px-4">Staff Member</th>
+                                    <th className="py-3 px-4">Department</th>
+                                    <th className="py-3 px-4 text-right">Basic (KSh)</th>
+                                    <th className="py-3 px-4 text-right">Gross (KSh)</th>
+                                    <th className="py-3 px-4 text-right">Statutory Deductions</th>
+                                    <th className="py-3 px-4 text-right">Net Remittance</th>
+                                    <th className="py-3 px-4 text-center">Status</th>
+                                    <th className="py-3 px-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {payrolls.data && payrolls.data.length > 0 ? (
+                                    payrolls.data.map((row) => {
+                                        const gross = Number(row.basic_salary) + Number(row.total_allowances);
+                                        return (
+                                            <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                                <td className="py-3 px-4">
+                                                    <div className="font-bold text-slate-900 dark:text-white">
+                                                        {row.staff?.first_name} {row.staff?.last_name}
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-400 font-mono">
+                                                        {row.staff?.emp_id || 'EMP-STAFF'}
+                                                    </div>
+                                                </td>
+
+                                                <td className="py-3 px-4">
+                                                    <span className="font-semibold text-slate-600 dark:text-slate-300">
+                                                        {row.staff?.department?.name || 'General'}
+                                                    </span>
+                                                </td>
+
+                                                <td className="py-3 px-4 text-right font-mono">
+                                                    {Number(row.basic_salary).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                </td>
+
+                                                <td className="py-3 px-4 text-right font-mono font-semibold">
+                                                    {gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                </td>
+
+                                                <td className="py-3 px-4 text-right font-mono text-rose-600 font-semibold">
+                                                    -KSh {Number(row.total_deductions).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                </td>
+
+                                                <td className="py-3 px-4 text-right font-mono font-bold text-emerald-600">
+                                                    KSh {Number(row.net_salary).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                </td>
+
+                                                <td className="py-3 px-4 text-center">
+                                                    {row.status === 'paid' ? (
+                                                        <span className="inline-flex items-center text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                            Paid
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                                            Generated
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                <td className="py-3 px-4 text-right space-x-1">
+                                                    <Link
+                                                        href={`/school/hr/payroll/${row.id}/slip`}
+                                                        className="inline-flex items-center h-7 px-2.5 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold"
+                                                    >
+                                                        <FileText className="w-3 h-3 mr-1" />
+                                                        Payslip
+                                                    </Link>
+
+                                                    {row.status !== 'paid' && (
+                                                        <button
+                                                            onClick={() => handleMarkPaid(row.id)}
+                                                            className="inline-flex items-center h-7 px-2.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold"
+                                                        >
+                                                            <CheckCircle2 className="w-3 h-3 mr-1" />
+                                                            Mark Paid
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                ) : (
+                                    <tr>
+                                        <td colSpan={8} className="py-12 text-center text-xs text-slate-500">
+                                            No payroll records generated for {monthYear}. Click "Generate Monthly Payroll" to run the statutory engine.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
-            {/* Generate Dialog */}
-            <Dialog open={genOpen} onOpenChange={setGenOpen}>
-                <DialogContent className="sm:max-w-sm">
-                    <DialogHeader><DialogTitle>Generate Payroll</DialogTitle></DialogHeader>
-                    <div className="space-y-4 mt-2">
-                        <div className="space-y-1.5">
-                            <Label>Month <span className="text-red-500">*</span></Label>
-                            <Input type="month" value={genForm.month_year} onChange={e => setGenForm(p => ({ ...p, month_year: e.target.value }))} />
+            {/* MODAL 1: GENERATE MONTHLY PAYROLL */}
+            {generateModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+                        <div className="flex items-center justify-between border-b pb-3">
+                            <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                                <Play className="w-4 h-4 text-indigo-600" />
+                                Process Kenya Statutory Payroll
+                            </h3>
+                            <button onClick={() => setGenerateModalOpen(false)} className="text-slate-400 hover:text-slate-600">&times;</button>
                         </div>
-                        <div className="space-y-1.5">
-                            <Label>Department (optional)</Label>
-                            <Select value={genForm.department_id} onValueChange={v => setGenForm(p => ({ ...p, department_id: v }))}>
-                                <SelectTrigger><SelectValue placeholder="All Departments" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="">All Departments</SelectItem>
-                                    {departments.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label>Working Days <span className="text-red-500">*</span></Label>
-                            <Input type="number" min="1" max="31" value={genForm.working_days} onChange={e => setGenForm(p => ({ ...p, working_days: e.target.value }))} />
-                        </div>
-                        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                            Net salary will be adjusted based on attendance records. Staff without a salary structure will be skipped.
-                        </div>
+
+                        <form onSubmit={handleGenerate} className="space-y-3 text-xs">
+                            <p className="text-slate-600 dark:text-slate-400">
+                                The engine will compute Gross Salaries, NSSF Tier I/II, SHIF (2.75%), Affordable Housing Levy (1.5%), and KRA PAYE tax reliefs for all active staff.
+                            </p>
+
+                            <div>
+                                <label className="font-bold block mb-1">Target Period (YYYY-MM):</label>
+                                <Input
+                                    type="month"
+                                    required
+                                    value={genForm.data.month_year}
+                                    onChange={(e) => genForm.setData('month_year', e.target.value)}
+                                    className="h-8 text-xs font-mono"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="font-bold block mb-1">Target Department:</label>
+                                <Select
+                                    value={genForm.data.department_id || 'all'}
+                                    onValueChange={(v) => genForm.setData('department_id', v === 'all' ? '' : v)}
+                                >
+                                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="All Departments" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Departments (Entire Institution)</SelectItem>
+                                        {departments.map((d) => (
+                                            <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div>
+                                <label className="font-bold block mb-1">Total Standard Working Days:</label>
+                                <Input
+                                    type="number"
+                                    required
+                                    min={1}
+                                    max={31}
+                                    value={genForm.data.working_days}
+                                    onChange={(e) => genForm.setData('working_days', Number(e.target.value))}
+                                    className="h-8 text-xs font-mono"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-3 border-t">
+                                <Button type="button" variant="outline" onClick={() => setGenerateModalOpen(false)} size="sm">Cancel</Button>
+                                <Button type="submit" disabled={genForm.processing} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold">
+                                    {genForm.processing ? 'Calculating...' : 'Run Payroll Engine'}
+                                </Button>
+                            </div>
+                        </form>
                     </div>
-                    <DialogFooter>
-                        <Button variant="ghost" onClick={() => setGenOpen(false)}>Cancel</Button>
-                        <Button onClick={handleGenerate} disabled={generating} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-                            {generating ? 'Generating...' : 'Generate'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                </div>
+            )}
+
+            {/* MODAL 2: DYNAMIC STATUTORY & TAX CONFIGURATION */}
+            {configModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl max-w-2xl w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between border-b pb-3">
+                            <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                                <Sliders className="w-4 h-4 text-indigo-600" />
+                                Dynamic Statutory Rates & Tax Reliefs (Kenya)
+                            </h3>
+                            <button onClick={() => setConfigModalOpen(false)} className="text-slate-400 hover:text-slate-600">&times;</button>
+                        </div>
+
+                        <form onSubmit={handleSaveStatutory} className="space-y-4 text-xs">
+                            {/* NSSF Section */}
+                            <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-2">
+                                <div className="font-bold text-slate-900 dark:text-white flex justify-between items-center">
+                                    <span>NSSF Parameters</span>
+                                    <label className="flex items-center gap-1 font-normal cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={statForm.data.nssf_enabled}
+                                            onChange={(e) => statForm.setData('nssf_enabled', e.target.checked)}
+                                        /> Enable NSSF
+                                    </label>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <label className="text-[11px] text-slate-500">Rate (%)</label>
+                                        <Input
+                                            type="number"
+                                            step="0.1"
+                                            value={statForm.data.nssf_rate}
+                                            onChange={(e) => statForm.setData('nssf_rate', Number(e.target.value))}
+                                            className="h-8 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] text-slate-500">Tier I Limit (KSh)</label>
+                                        <Input
+                                            type="number"
+                                            value={statForm.data.nssf_tier1_limit}
+                                            onChange={(e) => statForm.setData('nssf_tier1_limit', Number(e.target.value))}
+                                            className="h-8 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] text-slate-500">Tier II Limit (KSh)</label>
+                                        <Input
+                                            type="number"
+                                            value={statForm.data.nssf_tier2_limit}
+                                            onChange={(e) => statForm.setData('nssf_tier2_limit', Number(e.target.value))}
+                                            className="h-8 text-xs font-mono"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* SHIF & Housing Levy */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-2">
+                                    <div className="font-bold text-slate-900 dark:text-white flex justify-between items-center">
+                                        <span>SHIF (Health Fund)</span>
+                                        <label className="flex items-center gap-1 font-normal cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={statForm.data.shif_enabled}
+                                                onChange={(e) => statForm.setData('shif_enabled', e.target.checked)}
+                                            /> Enable
+                                        </label>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="text-[11px] text-slate-500">Rate (%)</label>
+                                            <Input
+                                                type="number"
+                                                step="0.01"
+                                                value={statForm.data.shif_rate}
+                                                onChange={(e) => statForm.setData('shif_rate', Number(e.target.value))}
+                                                className="h-8 text-xs font-mono"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] text-slate-500">Minimum Floor (KSh)</label>
+                                            <Input
+                                                type="number"
+                                                value={statForm.data.shif_min_amount}
+                                                onChange={(e) => statForm.setData('shif_min_amount', Number(e.target.value))}
+                                                className="h-8 text-xs font-mono"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-2">
+                                    <div className="font-bold text-slate-900 dark:text-white flex justify-between items-center">
+                                        <span>Housing Levy (AHL)</span>
+                                        <label className="flex items-center gap-1 font-normal cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={statForm.data.housing_levy_enabled}
+                                                onChange={(e) => statForm.setData('housing_levy_enabled', e.target.checked)}
+                                            /> Enable
+                                        </label>
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] text-slate-500">Rate (%)</label>
+                                        <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={statForm.data.housing_levy_rate}
+                                            onChange={(e) => statForm.setData('housing_levy_rate', Number(e.target.value))}
+                                            className="h-8 text-xs font-mono"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Tax Reliefs */}
+                            <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-2">
+                                <div className="font-bold text-slate-900 dark:text-white">Tax Reliefs & Exemptions</div>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <label className="text-[11px] text-slate-500">Personal Relief (KSh/Mo)</label>
+                                        <Input
+                                            type="number"
+                                            value={statForm.data.personal_relief}
+                                            onChange={(e) => statForm.setData('personal_relief', Number(e.target.value))}
+                                            className="h-8 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] text-slate-500">SHIF Relief (%)</label>
+                                        <Input
+                                            type="number"
+                                            value={statForm.data.shif_relief_rate}
+                                            onChange={(e) => statForm.setData('shif_relief_rate', Number(e.target.value))}
+                                            className="h-8 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] text-slate-500">Housing Relief (%)</label>
+                                        <Input
+                                            type="number"
+                                            value={statForm.data.housing_relief_rate}
+                                            onChange={(e) => statForm.setData('housing_relief_rate', Number(e.target.value))}
+                                            className="h-8 text-xs font-mono"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-3 border-t">
+                                <Button type="button" variant="outline" onClick={() => setConfigModalOpen(false)} size="sm">Cancel</Button>
+                                <Button type="submit" disabled={statForm.processing} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
+                                    <Save className="w-3.5 h-3.5 mr-1" />
+                                    Save Statutory Rules
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </AppLayout>
     );
 }

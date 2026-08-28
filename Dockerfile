@@ -1,4 +1,4 @@
-FROM php:8.3-apache
+FROM php:8.4-apache
 
 # Install system dependencies, SQLite, Git, and Node.js for Vite/Inertia
 RUN apt-get update && apt-get install -y \

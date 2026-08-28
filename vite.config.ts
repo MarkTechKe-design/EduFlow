@@ -13,9 +13,9 @@ export default defineConfig({
     ],
     resolve: {
         alias: {
-            '@': path.resolve(__dirname, './resources/js'),
-            '@/components': path.resolve(__dirname, './resources/js/Components'),
-            '@/Components': path.resolve(__dirname, './resources/js/Components'),
+            '@': path.resolve(import.meta.dirname, './resources/js'),
+            '@/components': path.resolve(import.meta.dirname, './resources/js/Components'),
+            '@/Components': path.resolve(import.meta.dirname, './resources/js/Components'),
         },
     },
 });

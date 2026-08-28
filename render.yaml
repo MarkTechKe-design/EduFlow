@@ -1,17 +1,11 @@
 services:
   - type: web
-    name: eduflow-cms
+    name: eduflow-saas
     env: php
     region: frankfurt
-    plan: starter
-    buildCommand: |
-      composer install --no-dev --optimize-autoloader --no-interaction
-      npm install
-      npm run build
-      php artisan config:cache
-      php artisan route:cache
-      php artisan view:cache
-    startCommand: apache2-foreground
+    plan: free
+    buildCommand: "composer install --no-dev --optimize-autoloader && npm install && npm run build && php artisan config:clear && php artisan cache:clear && touch database/database.sqlite && php artisan migrate:fresh --seed --force && php artisan storage:link"
+    startCommand: "php artisan serve --host=0.0.0.0 --port=$PORT"
     envVars:
       - key: APP_ENV
         value: production
@@ -19,13 +13,3 @@ services:
         value: false
       - key: LOG_CHANNEL
         value: stderr
-      - key: DB_CONNECTION
-        value: pgsql
-      - key: BROADCAST_CONNECTION
-        value: log
-      - key: QUEUE_CONNECTION
-        value: database
-      - key: SESSION_DRIVER
-        value: database
-      - key: CACHE_STORE
-        value: database

@@ -11,8 +11,9 @@ class OdpcAuditService
         string $action,
         string $resourceType,
         ?int $studentId = null,
-        ?string $resourceId = null,
-        ?array $details = null
+        ?int $resourceId = null,
+        ?array $details = null,
+        ?string $description = null
     ): ?DataAccessLog {
         $user = auth()->user();
         if (!$user) {
@@ -25,8 +26,9 @@ class OdpcAuditService
             'student_id'    => $studentId,
             'action'        => strtoupper($action),
             'resource_type' => $resourceType,
-            'resource_id'   => $resourceId ? (string)$resourceId : null,
-            'details'       => $details ? json_encode($details) : null,
+            'resource_id'   => $resourceId,
+            'description'   => $description,
+            'metadata'      => $details ? json_encode($details) : null,
             'ip_address'    => Request::ip(),
             'user_agent'    => Request::userAgent(),
             'created_at'    => now(),

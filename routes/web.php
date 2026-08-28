@@ -59,10 +59,15 @@ Route::middleware('guest')->group(function () {
     Route::post('/register-school', [RegistrationController::class, 'store'])->middleware('throttle:register')->name('register-school.store');
     Route::post('/register-school/validate-coupon', [RegistrationController::class, 'validateCoupon'])->middleware('throttle:register')->name('register-school.coupon.validate');
 
+        // Authentication & Password Recovery
     Route::get('/password/forgot', [PasswordResetController::class, 'createRequest'])->name('password.request');
+    Route::get('/forgot-password', [PasswordResetController::class, 'createRequest'])->name('password.request.alias');
     Route::post('/password/forgot', [PasswordResetController::class, 'sendLink'])->middleware('throttle:password-reset-request')->name('password.email');
+    Route::post('/forgot-password', [PasswordResetController::class, 'sendLink'])->middleware('throttle:password-reset-request')->name('password.email.alias');
     Route::get('/password/reset/{token}', [PasswordResetController::class, 'createReset'])->name('password.reset');
+    Route::get('/reset-password/{token}', [PasswordResetController::class, 'createReset'])->name('password.reset.alias');
     Route::post('/password/reset', [PasswordResetController::class, 'reset'])->middleware('throttle:password-reset-submit')->name('password.update');
+    Route::post('/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:password-reset-submit')->name('password.update.alias');
 });
 
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware(['auth', 'active'])->name('logout');
@@ -260,7 +265,8 @@ Route::middleware(['auth', 'verified', 'active', 'module', 'school-role', 'role:
         Route::get('/students/visitor-desk', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'index'])->name('students.visitor-desk');
         Route::get('/admissions/inquiries', [\App\Http\Controllers\SchoolAdmin\AdmissionInquiryController::class, 'index'])->name('admissions.inquiries');
         Route::post('/admissions/inquiries', [\App\Http\Controllers\SchoolAdmin\AdmissionInquiryController::class, 'store'])->name('admissions.inquiries.store');
-        Route::get('/admissions/visitors', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'index'])->name('admissions.visitors');
+        Route::get('/admissions/visitors/export-csv', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'exportCsv'])->name('admissions.visitors.export');
+            Route::get('/admissions/visitors', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'index'])->name('admissions.visitors');
         Route::post('/admissions/visitors', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'store'])->name('admissions.visitors.store');
         Route::post('/students/{student}/documents', [\App\Http\Controllers\SchoolAdmin\StudentController::class, 'uploadDocument'])->middleware(['permission:students.create', 'throttle:uploads'])->name('students.documents.upload');
         Route::get('/students/{student}/documents/{document}/download', [\App\Http\Controllers\SchoolAdmin\StudentController::class, 'downloadDocument'])->middleware('permission:students.view')->name('students.documents.download');
@@ -274,7 +280,10 @@ Route::middleware(['auth', 'verified', 'active', 'module', 'school-role', 'role:
         Route::post('/staff/{staff}/documents', [\App\Http\Controllers\SchoolAdmin\StaffController::class, 'uploadDocument'])->name('staff.documents.upload');
         Route::delete('/staff/documents/{document}', [\App\Http\Controllers\SchoolAdmin\StaffController::class, 'deleteDocument'])->name('staff.documents.delete');
         Route::get('/staff/documents/{document}/download', [\App\Http\Controllers\SchoolAdmin\StaffController::class, 'downloadDocument'])->name('staff.documents.download');
-        Route::resource('staff', \App\Http\Controllers\SchoolAdmin\StaffController::class);
+        Route::get('/staff/import/template', [\App\Http\Controllers\SchoolAdmin\StaffController::class, 'downloadTemplate'])->name('staff.import.template');
+            Route::post('/staff/import/preview', [\App\Http\Controllers\SchoolAdmin\StaffController::class, 'previewImport'])->name('staff.import.preview');
+            Route::post('/staff/import/process', [\App\Http\Controllers\SchoolAdmin\StaffController::class, 'processImport'])->name('staff.import.process');
+            Route::resource('staff', \App\Http\Controllers\SchoolAdmin\StaffController::class);
 
         // Academic Structure
         Route::resource('classes', \App\Http\Controllers\SchoolAdmin\ClassController::class)->except(['create', 'edit', 'show']);
@@ -498,6 +507,7 @@ Route::middleware(['auth', 'active', 'role:parent'])->prefix('parent')->name('pa
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'active', 'role:super-admin'])->prefix('super-admin')->name('super-admin.')->group(function () {
+    Route::get('/settings', [\App\Http\Controllers\SuperAdmin\SettingsController::class, 'index'])->name('settings.index');
 
         // --- AUTOMATED AUDIT REPAIRS: SUPER ADMIN ENDPOINTS ---
         Route::match(['post', 'patch'], '/faqs/{faq}/toggle-publish', [\App\Http\Controllers\SuperAdmin\FaqController::class, 'togglePublish'])->name('faqs.toggle-publish');

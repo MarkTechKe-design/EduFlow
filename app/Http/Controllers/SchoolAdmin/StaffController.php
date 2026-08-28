@@ -207,5 +207,140 @@ class StaffController extends Controller
         }
         return response()->json(['status' => 'ok']);
     }
-}
 
+    public function downloadTemplate(): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $this->authorize('create', \App\Models\Staff::class);
+
+        $headers = [
+            'first_name',
+            'last_name',
+            'email',
+            'phone',
+            'gender',
+            'joining_date',
+            'salary',
+        ];
+
+        return response()->streamDownload(function () use ($headers) {
+            $handle = fopen('php://output', 'w');
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+            fputcsv($handle, $headers);
+            fputcsv($handle, [
+                'Jane',
+                'Mwangi',
+                'jane.mwangi@example.com',
+                '0712345678',
+                'female',
+                '2024-01-15',
+                '45000',
+            ]);
+            fclose($handle);
+        }, 'staff_import_template.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    public function previewImport(\Illuminate\Http\Request $request): \Illuminate\Http\JsonResponse
+    {
+        $this->authorize('create', \App\Models\Staff::class);
+
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt|max:10240',
+        ]);
+
+        $file = $request->file('file');
+        $handle = fopen($file->getRealPath(), 'r');
+        if ($handle === false) {
+            return response()->json(['error' => 'Unable to read CSV file.'], 422);
+        }
+
+        $header = fgetcsv($handle);
+        if (!$header) {
+            fclose($handle);
+            return response()->json(['error' => 'CSV file is empty.'], 422);
+        }
+
+        $rows = [];
+        $errors = [];
+        $rowIndex = 1;
+
+        while (($data = fgetcsv($handle)) !== false) {
+            $rowIndex++;
+            if (empty(array_filter($data))) {
+                continue;
+            }
+
+            $row = @array_combine($header, $data);
+            if (!$row) {
+                $errors[] = "Row {$rowIndex}: Column mismatch.";
+                continue;
+            }
+
+            $firstName = trim($row['first_name'] ?? '');
+            $lastName  = trim($row['last_name'] ?? '');
+
+            if (empty($firstName)) {
+                $errors[] = "Row {$rowIndex}: First Name is required.";
+            }
+
+            $rows[] = [
+                'first_name'   => $firstName,
+                'last_name'    => $lastName,
+                'email'        => trim($row['email'] ?? ''),
+                'phone'        => trim($row['phone'] ?? ''),
+                'gender'       => in_array(strtolower(trim($row['gender'] ?? '')), ['male', 'female', 'other']) ? strtolower(trim($row['gender'])) : 'male',
+                'joining_date' => trim($row['joining_date'] ?? now()->toDateString()),
+                'salary'       => (float) ($row['salary'] ?? 0),
+            ];
+
+            if (count($rows) >= 500) {
+                break;
+            }
+        }
+        fclose($handle);
+
+        return response()->json([
+            'rows'   => $rows,
+            'count'  => count($rows),
+            'errors' => $errors,
+        ]);
+    }
+
+    public function processImport(\Illuminate\Http\Request $request): \Illuminate\Http\JsonResponse
+    {
+        $this->authorize('create', \App\Models\Staff::class);
+
+        $request->validate([
+            'staff' => 'required|array|min:1',
+            'staff.*.first_name' => 'required|string|max:100',
+        ]);
+
+        $schoolId = auth()->user()->school_id;
+        $importedCount = 0;
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($request, $schoolId, &$importedCount) {
+            foreach ($request->input('staff') as $item) {
+                $staff = new \App\Models\Staff();
+                $staff->school_id     = $schoolId;
+                $staff->first_name    = trim($item['first_name']);
+                $staff->last_name     = trim($item['last_name'] ?? '');
+                $staff->email         = !empty($item['email']) ? trim($item['email']) : null;
+                $staff->phone         = !empty($item['phone']) ? trim($item['phone']) : null;
+                $staff->gender        = in_array($item['gender'] ?? '', ['male', 'female', 'other']) ? $item['gender'] : 'male';
+                $staff->joining_date  = !empty($item['joining_date']) ? $item['joining_date'] : now()->toDateString();
+                $staff->salary        = (float) ($item['salary'] ?? 0);
+                $staff->status        = 'active';
+                $staff->save();
+
+                $importedCount++;
+            }
+        });
+
+        return response()->json([
+            'success'  => true,
+            'imported' => $importedCount,
+            'message'  => "Successfully imported {$importedCount} staff members.",
+        ]);
+    }
+}

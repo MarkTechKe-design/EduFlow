@@ -150,4 +150,85 @@ class VisitorLogController extends Controller
         }
         return response()->json(['status' => 'ok']);
     }
+
+    public function exportCsv(\Illuminate\Http\Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $schoolId = $this->getSchoolId();
+        $fileName = 'visitor_log_' . now()->format('Y_m_d_His') . '.csv';
+
+        $admCol = \Illuminate\Support\Facades\Schema::hasColumn('students', 'admission_no') ? 'admission_no' : (\Illuminate\Support\Facades\Schema::hasColumn('students', 'adm_no') ? 'adm_no' : 'id');
+
+        $query = \App\Models\VisitorLog::where('school_id', $schoolId)
+            ->with([
+                'staff:id,first_name,last_name,emp_id',
+                'student:id,first_name,last_name,' . $admCol,
+                'department:id,name,code'
+            ])
+            ->when($request->filled('date_from'), fn($q) => $q->whereDate('time_in', '>=', $request->date_from))
+            ->when($request->filled('date_to'), fn($q) => $q->whereDate('time_in', '<=', $request->date_to))
+            ->when($request->filled('search'), function ($q) use ($request, $admCol) {
+                $s = $request->search;
+                $q->where(function ($sub) use ($s, $admCol) {
+                    $sub->where('name', 'like', "%{$s}%")
+                        ->orWhere('phone', 'like', "%{$s}%")
+                        ->orWhere('id_number', 'like', "%{$s}%")
+                        ->orWhere('vehicle_reg', 'like', "%{$s}%")
+                        ->orWhere('badge_number', 'like', "%{$s}%")
+                        ->orWhere('person_to_meet', 'like', "%{$s}%")
+                        ->orWhere('purpose', 'like', "%{$s}%")
+                        ->orWhereHas('staff', function ($sq) use ($s) {
+                            $sq->where('first_name', 'like', "%{$s}%")
+                               ->orWhere('last_name', 'like', "%{$s}%");
+                        })
+                        ->orWhereHas('student', function ($sq) use ($s, $admCol) {
+                            $sq->where('first_name', 'like', "%{$s}%")
+                               ->orWhere('last_name', 'like', "%{$s}%")
+                               ->orWhere($admCol, 'like', "%{$s}%");
+                        });
+                });
+            })
+            ->latest('time_in');
+
+        return response()->streamDownload(function () use ($query) {
+            $handle = fopen('php://output', 'w');
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            fputcsv($handle, [
+                'ID',
+                'Visitor Name',
+                'Phone Number',
+                'National ID / Passport',
+                'Person to Meet',
+                'Purpose of Visit',
+                'Category',
+                'Vehicle Reg',
+                'Badge Number',
+                'Time In',
+                'Time Out',
+            ]);
+
+            $query->chunk(200, function ($logs) use ($handle) {
+                foreach ($logs as $log) {
+                    fputcsv($handle, [
+                        $log->id,
+                        $log->name ?? '',
+                        $log->phone ?? '',
+                        $log->id_number ?? '',
+                        $log->person_to_meet ?? '',
+                        $log->purpose ?? '',
+                        $log->category ?? 'parent_inquiry',
+                        $log->vehicle_reg ?? '',
+                        $log->badge_number ?? '',
+                        $log->time_in ? $log->time_in->format('Y-m-d H:i:s') : '',
+                        $log->time_out ? $log->time_out->format('Y-m-d H:i:s') : 'On Campus',
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        }, $fileName, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+        ]);
+    }
 }

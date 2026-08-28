@@ -37,9 +37,15 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (UnauthorizedException $e, $request) {
-            abort(403, 'User does not possess the required role or permission.');
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json(['message' => 'User does not possess the required role.'], 403);
+            }
+            return response('Forbidden', 403);
         });
         $exceptions->render(function (AuthorizationException $e, $request) {
-            abort(403, 'This action is unauthorized.');
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json(['message' => 'This action is unauthorized.'], 403);
+            }
+            return response('Forbidden', 403);
         });
     })->create();

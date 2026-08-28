@@ -17,6 +17,7 @@ class SendSmsBlast implements ShouldQueue
 
     public int $tries = 3;
     public int $timeout = 180;
+    public array $backoff = [10, 30, 60];
 
     public function __construct(
         public readonly array  $recipients,

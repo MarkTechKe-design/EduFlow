@@ -14,6 +14,10 @@ class SendPaymentReceiptNotification implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public int $tries = 3;
+    public int $timeout = 90;
+    public array $backoff = [5, 20, 60];
+
     public function __construct(
         public FeePayment $feePayment,
         public ?string $recipientEmail = null
@@ -30,6 +34,13 @@ class SendPaymentReceiptNotification implements ShouldQueue
             return;
         }
 
-        Log::info("Dispatched Payment Receipt #{$payment->receipt_no} to {$email} for Student {$student?->first_name} {$student?->last_name} (KSh {$payment->amount_paid})");
+        try {
+            $notificationService = app(\App\Services\NotificationService::class);
+            $notificationService->sendPaymentReceipt($payment, $email);
+            Log::info("Payment Receipt dispatched successfully to {$email} for receipt #{$payment->receipt_no}");
+        } catch (\Throwable $e) {
+            Log::error("Failed to dispatch payment receipt for #{$payment->receipt_no}: " . $e->getMessage());
+            throw $e;
+        }
     }
 }

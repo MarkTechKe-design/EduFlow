@@ -16,7 +16,10 @@ class DatabaseSeeder extends Seeder
             RolePermissionSeeder::class,
             PackageSeeder::class,
             WebsitePageSeeder::class,
+            WebsiteLegalSeeder::class,
+            WebsiteAboutSeeder::class,
             WebsiteSeeder::class,
+            FaqSeeder::class,
             DemoUserSeeder::class,
             SchoolSetupSeeder::class,
             StudentSeeder::class,
@@ -32,6 +35,7 @@ class DatabaseSeeder extends Seeder
             HostelSeeder::class,
             HomeworkSeeder::class,
             CommunicationSeeder::class,
+            BlogPostSeeder::class,
         ]);
     }
 }

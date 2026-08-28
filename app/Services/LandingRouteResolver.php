@@ -1,6 +1,8 @@
+namespace App\Services;
+
 <?php
 
-namespace App\Support\Authorization;
+
 
 use App\Models\User;
 use Illuminate\Support\Facades\Route;

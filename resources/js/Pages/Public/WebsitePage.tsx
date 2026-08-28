@@ -14,6 +14,17 @@ import PricingView from '@/components/marketing/PricingView';
 import AboutView from '@/components/marketing/AboutView';
 import ContactView from '@/components/marketing/ContactView';
 import LegalView from '@/components/marketing/LegalView';
+import {
+    HomeQuickHighlights,
+    HomeEfficiencyMatrix,
+    HomeTermLifecycle,
+    HomeCurriculumTypes,
+    HomeOperationalControl,
+    HomeOutcomesMetrics,
+    HomeGuidedOnboarding,
+    HomeResourcesGuides,
+    HomeActionBanner,
+} from '@/components/marketing/HomeSections';
 
 interface Package {
     id: number;
@@ -41,6 +52,7 @@ interface Branding {
 }
 
 interface Section {
+    identifier?: string;
     block_type: string;
     content: Record<string, any> | null;
 }
@@ -100,9 +112,13 @@ export default function WebsitePage({
     const path = aliasMap[rawPath] || rawPath;
     const isLegal = LEGAL_SLUGS.includes(path);
 
-    const section = (type: string) => page?.sections?.find((item) => item.block_type === type)?.content || {};
-    const hero = section('hero');
-    const faq = section('faq');
+    const getSection = (key: string) => 
+        page?.sections?.find((item) => item.identifier === key)?.content || 
+        page?.sections?.find((item) => item.block_type === key)?.content || 
+        {};
+
+    const hero = getSection('hero');
+    const faq = getSection('faq') || getSection('questions');
     const homepageFaqItems = homepageFaqs.length > 0 ? homepageFaqs : (faq.items || []);
     const title = page?.seo_title || page?.title || (branding?.name ? `${branding.name} - Modern School Management & CBC Platform` : 'EduFlow');
 
@@ -131,14 +147,58 @@ export default function WebsitePage({
 
             {path === 'home' && (
                 <>
+                    {/* 1. Primary Hero */}
                     <HeroSection body={hero.body} />
+
+                    {/* 2. Quick 5-Pill Highlights */}
+                    <HomeQuickHighlights content={getSection('home-quick-highlights')} />
+
+                    {/* 3. Product Preview Showcase */}
                     <ProductShowcase />
+
+                    {/* 4. Connected Operations Flow */}
                     <SystemConnectionSection />
+
+                    {/* 5. Efficiency Matrix (Digital vs Manual) */}
+                    <HomeEfficiencyMatrix content={getSection('home-efficiency-matrix')} />
+
+                    {/* 6. Multi-Curriculum & Campus Banner */}
+                    <HomeCurriculumTypes content={getSection('home-curriculum-types')} />
+
+                    {/* 7. Comprehensive Capabilities Grid */}
                     <FeatureShowcase />
+
+                    {/* 8. Stakeholder Roles Breakdown */}
                     <RoleExperienceSection />
+
+                    {/* 9. Continuous Term Lifecycle (8 Steps) */}
+                    <HomeTermLifecycle content={getSection('home-term-lifecycle')} />
+
+                    {/* 10. Operational Control Tools Grid */}
+                    <HomeOperationalControl content={getSection('home-operational-control')} />
+
+                    {/* 11. Outcomes & Performance Metrics */}
+                    <HomeOutcomesMetrics content={getSection('home-outcomes-metrics')} />
+
+                    {/* 12. 5-Step Guided Onboarding */}
+                    <HomeGuidedOnboarding content={getSection('home-guided-onboarding')} />
+
+                    {/* 13. Institutional Trust & Security */}
                     <SecurityTrustSection />
+
+                    {/* 14. Transparent School Packages */}
                     <PricingSection packages={packages} />
+
+                    {/* 15. Resources & Scaling Guides */}
+                    <HomeResourcesGuides content={getSection('home-resources-guides')} />
+
+                    {/* 16. Frequently Asked Questions */}
                     <FAQSection faqs={homepageFaqItems} title={faq.heading} subtitle={faq.body} />
+
+                    {/* 17. High-Conversion Emerald Action Banner (PLACED AFTER FAQS) */}
+                    <HomeActionBanner content={getSection('home-action-banner')} />
+
+                    {/* 18. Announcement Modal */}
                     <AnnouncementModal />
                 </>
             )}

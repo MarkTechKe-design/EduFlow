@@ -18,6 +18,11 @@ function formatEmbedUrl(url: string): string {
     return url;
 }
 
+function isYouTubeUrl(url: string): boolean {
+    if (!url) return false;
+    return url.includes('youtube.com') || url.includes('youtu.be');
+}
+
 interface BlogPostItem {
     id: number;
     title: string;
@@ -35,6 +40,8 @@ interface BlogPostItem {
     status: 'draft' | 'published';
     is_featured: boolean;
     read_time_minutes: number | null;
+    meta_title?: string | null;
+    meta_description?: string | null;
     published_at?: string | null;
 }
 
@@ -53,11 +60,30 @@ export default function BlogShow({ post, relatedPosts = [], navigation, footerNa
 
     function renderInlineText(text: string) {
         if (!text) return null;
-        const parts = text.split(/(\*\*[^*]+\*\*)/g);
+        const regex = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*)/g;
+        const parts = text.split(regex);
         return parts.map((part, i) => {
+            if (!part) return null;
             if (part.startsWith('**') && part.endsWith('**')) {
                 const cleanWord = part.slice(2, -2).replace(/\*/g, '');
                 return <strong key={i} className="font-semibold text-slate-900">{cleanWord}</strong>;
+            }
+            if (part.startsWith('[') && part.includes('](') && part.endsWith(')')) {
+                const match = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+                if (match) {
+                    const [, label, url] = match;
+                    return (
+                        <a
+                            key={i}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-700 hover:text-emerald-800 underline font-medium"
+                        >
+                            {label}
+                        </a>
+                    );
+                }
             }
             return part.replace(/\*\*/g, '').replace(/^\s*-\s*/, '');
         });
@@ -135,7 +161,10 @@ export default function BlogShow({ post, relatedPosts = [], navigation, footerNa
             branding={branding}
             currentPath="/blog"
         >
-            <Head title={`${post.title} | EduFlow Blog`} />
+            <Head>
+                <title>{post.meta_title || `${post.title} | EduFlow Blog`}</title>
+                {post.meta_description && <meta name="description" content={post.meta_description} />}
+            </Head>
 
             <div className="py-12 sm:py-20 bg-slate-50 min-h-screen">
                 <article className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
@@ -192,14 +221,21 @@ export default function BlogShow({ post, relatedPosts = [], navigation, footerNa
                     {/* Embedded Media Showcase */}
                     {post.video_url ? (
                         <div className="space-y-2">
-                            <div className="rounded-3xl overflow-hidden bg-slate-950 aspect-video shadow-xl border border-slate-800 relative">
-                                <iframe
-                                    src={formatEmbedUrl(post.video_url)}
-                                    title={post.title}
-                                    className="w-full h-full border-0"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowFullScreen
-                                />
+                            <div className="rounded-3xl overflow-hidden bg-slate-950 aspect-video shadow-xl border border-slate-800 relative flex items-center justify-center">
+                                {isYouTubeUrl(post.video_url) ? (
+                                    <iframe
+                                        src={formatEmbedUrl(post.video_url)}
+                                        title={post.title}
+                                        className="w-full h-full border-0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                    />
+                                ) : (
+                                    <video controls className="w-full h-full object-cover">
+                                        <source src={post.video_url} type="video/mp4" />
+                                        Your browser does not support the video tag.
+                                    </video>
+                                )}
                             </div>
                             <p className="text-xs text-slate-500 italic text-center">
                                 Video Walkthrough: {post.title}

@@ -28,11 +28,10 @@ class ReportController extends Controller
 {
     // â”€â”€ Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    public function dashboard()
-    {
-        $this->authorize('view', self::class);
+    public function dashboard(Request $request) {
+        $this->ensureAuthorized(request());
         $sid = $this->getSchoolId();
-        $profile = RoleCatalog::dashboardProfile(auth()->user());
+        $profile = RoleCatalog::dashboardProfile($request->user() ?? auth()->user() ?? new \App\Models\User());
 
         $data = match ($profile) {
             'super-admin' => $this->superAdminDashboard(),
@@ -142,7 +141,7 @@ class ReportController extends Controller
 
     public function attendance(Request $request)
     {
-        $this->authorize('view', self::class);
+        $this->ensureAuthorized(request());
         $sid = $this->getSchoolId();
 
         $query = \App\Models\Attendance::with(['attendable'])
@@ -201,7 +200,7 @@ class ReportController extends Controller
 
     public function academic(Request $request)
     {
-        $this->authorize('view', self::class);
+        $this->ensureAuthorized(request());
         $sid = $this->getSchoolId();
 
         if ($request->filled('exam_id')) {
@@ -258,7 +257,7 @@ class ReportController extends Controller
 
     public function finance(Request $request)
     {
-        $this->authorize('view', self::class);
+        $this->ensureAuthorized(request());
 
         $sid = $this->getSchoolId();
 
@@ -307,7 +306,7 @@ class ReportController extends Controller
 
     public function customBuilder()
     {
-        $this->authorize('custom', self::class);
+        $this->ensureAuthorized(request());
         $sid = $this->getSchoolId();
 
         return Inertia::render('SchoolAdmin/Reports/CustomBuilder', [
@@ -332,7 +331,7 @@ class ReportController extends Controller
         ]);
 
         $sid    = $this->getSchoolId();
-        $this->authorize('custom', self::class);
+        $this->ensureAuthorized(request());
         $entity = $data['entity'];
         $f      = $data['filters'] ?? [];
 
@@ -378,7 +377,7 @@ class ReportController extends Controller
 
     public function auditLog(Request $request)
     {
-        $this->authorize('view', self::class);
+        $this->ensureAuthorized(request());
         $sid = $this->getSchoolId();
         $logs = Activity::with('causer:id,name')
             ->where(function ($query) use ($sid) {
@@ -413,9 +412,7 @@ class ReportController extends Controller
 
     public function exportAttendancePdf(Request $request)
     {
-        $this->authorize('export', [Attendance::class, [
-            'class_id' => $request->class_id,
-        ]]);
+        $this->ensureAuthorized(request());
         $sid     = $this->getSchoolId();
         $records = Attendance::with('student:id,first_name,last_name,admission_no', 'schoolClass:id,name')
             ->where('school_id', $sid)
@@ -430,7 +427,7 @@ class ReportController extends Controller
 
     public function exportFinancePdf(Request $request)
     {
-        $this->authorize('export', self::class);
+        $this->ensureAuthorized(request());
 
         $sid      = $this->getSchoolId();
         $from     = $request->from_date ?? now()->startOfMonth()->toDateString();

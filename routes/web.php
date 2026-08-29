@@ -606,3 +606,8 @@ Route::middleware(['auth'])->group(function () {
     Route::match(['get', 'post'], 'school/reports/cbc/bulk', [\App\Http\Controllers\SchoolAdmin\ReportController::class, 'bulkCbcReportCards'])
         ->name('school.reports.cbc.bulk');
 });
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('school/fees/reports/export-pdf', [\App\Http\Controllers\SchoolAdmin\FinancialReportController::class, 'exportPdf'])
+        ->name('school.fees.reports.export-pdf');
+});

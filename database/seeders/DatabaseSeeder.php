@@ -42,4 +42,5 @@ class DatabaseSeeder extends Seeder
         \App\Models\User::withoutGlobalScopes()
             ->whereNull('email_verified_at')
             ->update(['email_verified_at' => now()]);
+        \App\Models\User::withoutGlobalScopes()->whereNull('email_verified_at')->update(['email_verified_at' => now()]);
     }

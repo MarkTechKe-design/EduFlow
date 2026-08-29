@@ -13,13 +13,13 @@ use App\Models\Staff;
 use App\Models\Student;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InventoryController extends Controller
 {
-    
-
     public function index(Request $request): Response
     {
         $sid = $this->getSchoolId();
@@ -29,20 +29,20 @@ class InventoryController extends Controller
             ->when($request->search, fn ($q, $s) => $q->where('name', 'like', "%{$s}%"))
             ->when($request->category_id && $request->category_id !== 'all', fn ($q) => $q->where('category_id', $request->category_id))
             ->orderBy('name')
-            ->paginate(15, ['*'], 'items_page')
+            ->paginate(25, ['*'], 'items_page')
             ->withQueryString();
 
         $issues = InventoryIssue::with('item:id,name,unit')
             ->where('school_id', $sid)
             ->when($request->issue_status && $request->issue_status !== 'all', fn ($q) => $q->where('status', $request->issue_status))
             ->latest('issue_date')
-            ->paginate(15, ['*'], 'issues_page')
+            ->paginate(25, ['*'], 'issues_page')
             ->withQueryString();
 
         $purchases = InventoryPurchase::with('item:id,name,unit')
             ->where('school_id', $sid)
             ->latest('purchase_date')
-            ->paginate(15, ['*'], 'purchases_page')
+            ->paginate(25, ['*'], 'purchases_page')
             ->withQueryString();
 
         $assets = Asset::where('school_id', $sid)
@@ -53,7 +53,7 @@ class InventoryController extends Controller
             })
             ->when($request->asset_status && $request->asset_status !== 'all', fn ($q) => $q->where('status', $request->asset_status))
             ->orderBy('name')
-            ->paginate(15, ['*'], 'assets_page')
+            ->paginate(25, ['*'], 'assets_page')
             ->withQueryString();
 
         $categories = InventoryCategory::where('school_id', $sid)->orderBy('name')->get(['id', 'name']);
@@ -166,7 +166,7 @@ class InventoryController extends Controller
         InventoryCategory::where('school_id', $sid)->findOrFail($validated['category_id']);
 
         $validated['school_id'] = $sid;
-        $validated['current_stock'] = 0;
+        $validated['current_stock'] = (float) $request->input('current_stock', 0);
         $validated['is_active'] = true;
 
         InventoryItem::create($validated);
@@ -184,12 +184,14 @@ class InventoryController extends Controller
             'name'          => 'required|string|max:255',
             'unit'          => 'required|string|max:50',
             'minimum_stock' => 'required|numeric|min:0',
+            'current_stock' => 'nullable|numeric|min:0',
+            'category_id'   => 'nullable|integer',
         ]);
 
         $inventoryItem->update($validated);
 
         return redirect()->route('school.inventory.items')
-            ->with('success', 'Item updated.');
+            ->with('success', 'Item updated successfully.');
     }
 
     public function destroyItem(InventoryItem $inventoryItem): RedirectResponse
@@ -343,5 +345,223 @@ class InventoryController extends Controller
 
         return redirect()->route('school.inventory.assets')
             ->with('success', 'Maintenance record created.');
+    }
+
+    /**
+     * Export all store inventory items to CSV.
+     */
+    public function exportCsv(Request $request): StreamedResponse
+    {
+        $sid = $this->getSchoolId();
+        $fileName = 'Store_Inventory_' . date('Y_m_d_His') . '.csv';
+
+        $items = InventoryItem::with('category:id,name')
+            ->where('school_id', $sid)
+            ->orderBy('name')
+            ->get();
+
+        return response()->streamDownload(function () use ($items) {
+            $handle = fopen('php://output', 'w');
+            fputs($handle, "\xEF\xBB\xBF");
+
+            fputcsv($handle, [
+                'Item Name',
+                'Category',
+                'Unit of Measure',
+                'Current Stock',
+                'Minimum Stock Threshold',
+                'Stock Status',
+                'Description',
+            ]);
+
+            foreach ($items as $item) {
+                $status = ((float)$item->current_stock <= (float)$item->minimum_stock) ? 'Low Stock' : 'In Stock';
+                fputcsv($handle, [
+                    $item->name,
+                    $item->category?->name ?? 'General',
+                    $item->unit,
+                    $item->current_stock,
+                    $item->minimum_stock,
+                    $status,
+                    $item->description ?? '',
+                ]);
+            }
+
+            fclose($handle);
+        }, $fileName, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+        ]);
+    }
+
+    /**
+     * Download inventory import starter template.
+     */
+    public function downloadTemplate(): StreamedResponse
+    {
+        $fileName = 'EduFlow_Inventory_Import_Template.csv';
+
+        return response()->streamDownload(function () {
+            $handle = fopen('php://output', 'w');
+            fputs($handle, "\xEF\xBB\xBF");
+
+            fputcsv($handle, [
+                'name',
+                'category',
+                'unit',
+                'current_stock',
+                'minimum_stock',
+                'description',
+            ]);
+
+            // Kenyan School Standard Consumables Examples
+            fputcsv($handle, [
+                'A4 Printing Paper (White)',
+                'Stationery',
+                'reams',
+                '50',
+                '10',
+                '80gsm photocopy and assessment papers',
+            ]);
+            fputcsv($handle, [
+                'Dry-Erase Whiteboard Markers (Blue/Black)',
+                'Stationery',
+                'boxes',
+                '24',
+                '5',
+                'Non-toxic bullet tip dry wipe markers',
+            ]);
+            fputcsv($handle, [
+                'Handwashing Liquid Soap (5 Litres)',
+                'Sanitation & Cleaning',
+                'jerricans',
+                '12',
+                '3',
+                'Antiseptic dispenser refills for student washrooms',
+            ]);
+            fputcsv($handle, [
+                'First Aid Sterile Gauze Bandages',
+                'Health & Medical',
+                'packs',
+                '30',
+                '8',
+                'School sanatorium emergency medical dressings',
+            ]);
+            fputcsv($handle, [
+                'Size 5 Football Balls (Mitre/FIFA)',
+                'Games & Sports',
+                'pieces',
+                '15',
+                '4',
+                'Senior boys and girls league match balls',
+            ]);
+
+            fclose($handle);
+        }, $fileName, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+        ]);
+    }
+
+    /**
+     * Bulk import store items from CSV.
+     */
+    public function importCsv(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt|max:10240',
+        ]);
+
+        $sid = $this->getSchoolId();
+        $file = $request->file('file');
+        $path = $file->getRealPath();
+
+        $rows = array_map(function ($row) {
+            return str_getcsv($row);
+        }, file($path));
+
+        if (empty($rows) || count($rows) < 2) {
+            return back()->withErrors(['file' => 'Uploaded CSV file is empty or missing data rows.']);
+        }
+
+        $rawHeaders = array_shift($rows);
+        $headers = array_map(function ($h) {
+            return strtolower(trim(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $h)));
+        }, $rawHeaders);
+
+        $nameIdx = array_search('name', $headers);
+        if ($nameIdx === false) {
+            return back()->withErrors([
+                'file' => "Invalid CSV format. Missing required 'name' column header.",
+            ]);
+        }
+
+        $catIdx = array_search('category', $headers);
+        $unitIdx = array_search('unit', $headers);
+        $stockIdx = array_search('current_stock', $headers);
+        $minStockIdx = array_search('minimum_stock', $headers);
+        $descIdx = array_search('description', $headers);
+
+        $inserted = 0;
+        $updated = 0;
+        $skipped = 0;
+
+        DB::beginTransaction();
+        try {
+            foreach ($rows as $row) {
+                if (empty($row) || !isset($row[$nameIdx]) || trim($row[$nameIdx]) === '') {
+                    $skipped++;
+                    continue;
+                }
+
+                $name = trim($row[$nameIdx]);
+                $catName = ($catIdx !== false && isset($row[$catIdx]) && trim($row[$catIdx]) !== '') ? trim($row[$catIdx]) : 'General Store';
+                $unit = ($unitIdx !== false && isset($row[$unitIdx]) && trim($row[$unitIdx]) !== '') ? trim($row[$unitIdx]) : 'pcs';
+                $currentStock = ($stockIdx !== false && isset($row[$stockIdx]) && is_numeric($row[$stockIdx])) ? (float)$row[$stockIdx] : 0.0;
+                $minimumStock = ($minStockIdx !== false && isset($row[$minStockIdx]) && is_numeric($row[$minStockIdx])) ? (float)$row[$minStockIdx] : 5.0;
+                $description = ($descIdx !== false && isset($row[$descIdx])) ? trim($row[$descIdx]) : null;
+
+                // Auto find or create Category
+                $category = InventoryCategory::firstOrCreate(
+                    ['school_id' => $sid, 'name' => $catName],
+                    ['description' => "Category for {$catName}"]
+                );
+
+                // Check existing item by Name + School
+                $existingItem = InventoryItem::where('school_id', $sid)->where('name', $name)->first();
+
+                if ($existingItem) {
+                    $existingItem->current_stock += $currentStock;
+                    $existingItem->minimum_stock = $minimumStock;
+                    $existingItem->unit = $unit;
+                    $existingItem->category_id = $category->id;
+                    if ($description) $existingItem->description = $description;
+                    $existingItem->save();
+                    $updated++;
+                } else {
+                    InventoryItem::create([
+                        'school_id'     => $sid,
+                        'category_id'   => $category->id,
+                        'name'          => $name,
+                        'unit'          => $unit,
+                        'current_stock' => $currentStock,
+                        'minimum_stock' => $minimumStock,
+                        'description'   => $description,
+                        'is_active'     => true,
+                    ]);
+                    $inserted++;
+                }
+            }
+
+            DB::commit();
+
+            return redirect()->route('school.inventory.items')
+                ->with('success', "Batch import complete! {$inserted} store items registered, {$updated} existing item balances replenished.");
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return back()->withErrors([
+                'file' => 'Import encountered an error: ' . $e->getMessage(),
+            ]);
+        }
     }
 }

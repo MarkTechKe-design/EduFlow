@@ -657,18 +657,15 @@ class ReportController extends Controller
 
     protected function getSchoolId(): int
     {
-        return (int) (auth()->user()->school_id ?? 1);
+        $schoolId = auth()->user()?->school_id;
+        if (! $schoolId) {
+            abort(403, 'Tenant access denied: No valid school context.');
+        }
+
+        return (int) $schoolId;
     }
 
-    public function __call($method, $parameters)
-    {
-        $viewName = str_replace('Controller', '', class_basename($this)) . '/' . ucfirst($method);
-        if (\Inertia\Inertia::getFacadeRoot()) {
-            return \Inertia\Inertia::render($viewName, [
-                'school' => request()->user()?->school,
-                'students' => \App\Models\Student::query()->where('school_id', request()->user()?->school_id ?? 1)->limit(20)->get(),
-            ]);
-        }
+    
         return response()->json(['status' => 'ok']);
     }
 
@@ -677,6 +674,10 @@ class ReportController extends Controller
      */
     public function cbcReportCard(\Illuminate\Http\Request $request, \App\Models\Student $student)
     {
+        $schoolId = $this->getSchoolId();
+        if ((int) $student->school_id !== $schoolId) {
+            abort(403, 'Unauthorized access to student report in another institution.');
+        }
         $academicYearId = $request->input('academic_year_id') ? (int)$request->input('academic_year_id') : null;
         $term = $request->input('term', 'Term 1');
         $template = $request->input('template', 'executive');
@@ -705,7 +706,7 @@ class ReportController extends Controller
      */
     public function bulkCbcReportCards(\Illuminate\Http\Request $request)
     {
-        $schoolId = auth()->user()->school_id ?? 1;
+        $schoolId = $this->getSchoolId();
         $academicYearId = $request->input('academic_year_id') ? (int)$request->input('academic_year_id') : null;
         $term = $request->input('term', 'Term 1');
         $template = $request->input('template', 'executive');

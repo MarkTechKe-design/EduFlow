@@ -46,6 +46,10 @@ class EnsureSchoolRoleAccess
             abort(403, 'School tenant is suspended or inactive.');
         }
 
+        if ($school->verification_status === 'rejected') {
+            abort(403, 'School institution registration has been rejected by platform administration.');
+        }
+
         $routeName = $request->route()?->getName() ?? '';
 
         if ($user->hasRole('driver') && ! str_starts_with($routeName, 'school.transport.')) {

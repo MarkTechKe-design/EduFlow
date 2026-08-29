@@ -102,19 +102,29 @@ class PaymentProcessingService
     public static function resolveUnallocatedPayment(UnallocatedPayment $unallocated, Student $student, User $bursar, ?string $notes = null): FeePayment
     {
         return DB::transaction(function () use ($unallocated, $student, $bursar, $notes) {
+            // Pessimistically lock row for update to prevent concurrent duplicate resolution
+            $locked = UnallocatedPayment::where('id', $unallocated->id)
+                ->where('school_id', $unallocated->school_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($locked->status === 'allocated') {
+                throw new \DomainException("Unallocated payment #{$locked->id} with reference '{$locked->reference_code}' has already been allocated.");
+            }
+
             // Allocate to student ledger
             $payment = StudentLedgerService::allocatePayment(
                 $student,
-                (float)$unallocated->amount,
-                $unallocated->reference_code,
-                $unallocated->channel,
+                (float)$locked->amount,
+                $locked->reference_code,
+                $locked->channel,
                 [],
                 $bursar,
                 "Manual resolution from Unallocated Queue by {$bursar->name}. Notes: " . ($notes ?? 'N/A')
             );
 
             // Mark unallocated record as resolved
-            $unallocated->update([
+            $locked->update([
                 'status'                  => 'allocated',
                 'allocated_to_student_id' => $student->id,
                 'resolved_by'             => $bursar->id,

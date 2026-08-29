@@ -132,7 +132,7 @@ Route::middleware(['auth', 'active', 'school-role'])->prefix('school')->name('sc
         // --- AUTOMATED AUDIT REPAIRS: SCHOOL ADMIN ENDPOINTS ---
         Route::get('/fees', [\App\Http\Controllers\SchoolAdmin\FeePaymentController::class, 'index'])->name('fees.index');
         Route::get('/fees/reports', [\App\Http\Controllers\SchoolAdmin\FinancialReportController::class, 'index'])->name('fees.reports');
-        Route::post('/fees/reports/sms-defaulters', [\App\Http\Controllers\SchoolAdmin\FinancialReportController::class, 'sendBatchSms'])->name('fees.reports.sms-defaulters');
+        Route::post('/fees/reports/sms-defaulters', [\App\Http\Controllers\SchoolAdmin\FinancialReportController::class, 'sendBatchSms'])->middleware('permission:reports.view')->name('fees.reports.sms-defaulters');
         Route::post('/fees/unallocated/{payment}/resolve', [\App\Http\Controllers\SchoolAdmin\UnallocatedPaymentController::class, 'resolve'])->name('fees.unallocated.resolve');
 
         Route::match(['put', 'patch', 'post'], '/admissions/visitors/{id}/checkout', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'checkout'])->name('admissions.visitors.checkout');
@@ -469,7 +469,10 @@ Route::middleware(['auth', 'verified', 'active', 'module', 'school-role', 'role:
         Route::get('/reports/custom', [\App\Http\Controllers\SchoolAdmin\ReportController::class, 'customBuilder'])->middleware('permission:reports.custom')->name('reports.custom');
         Route::post('/reports/custom/run', [\App\Http\Controllers\SchoolAdmin\ReportController::class, 'runCustomReport'])->middleware('permission:reports.custom')->name('reports.custom.run');
         Route::get('/reports/custom/export-csv', [\App\Http\Controllers\SchoolAdmin\ReportController::class, 'exportCsv'])->middleware('permission:reports.export')->name('reports.custom.export-csv');
-        Route::get('/reports/audit-log', [\App\Http\Controllers\SchoolAdmin\ReportController::class, 'auditLog'])->name('reports.audit-log');
+                Route::get('/reports/audit-log', [\App\Http\Controllers\SchoolAdmin\ReportController::class, 'auditLog'])->name('reports.audit-log');
+        Route::get('/students/{student}/cbc-report', [\App\Http\Controllers\SchoolAdmin\ReportController::class, 'cbcReportCard'])->middleware('permission:reports.academic')->name('school.students.cbc-report');
+        Route::match(['get', 'post'], '/reports/cbc/bulk', [\App\Http\Controllers\SchoolAdmin\ReportController::class, 'bulkCbcReportCards'])->middleware('permission:reports.academic')->name('school.reports.cbc.bulk');
+        Route::get('/fees/reports/export-pdf', [\App\Http\Controllers\SchoolAdmin\FinancialReportController::class, 'exportPdf'])->middleware('permission:reports.export')->name('school.fees.reports.export-pdf');
         Route::get('/compliance/odpc-audit', [\App\Http\Controllers\SchoolAdmin\OdpcAuditController::class, 'index'])->name('compliance.odpc-audit');
 
         // Settings
@@ -609,18 +612,8 @@ Route::middleware(['auth', 'active'])->group(function () {
 
 
 // CBC Learner Report Card & Analytics Route (Print & PDF)
-Route::middleware(['auth'])->group(function () {
-    Route::get('school/students/{student}/cbc-report', [\App\Http\Controllers\SchoolAdmin\ReportController::class, 'cbcReportCard'])
-        ->name('school.students.cbc-report');
-});
+
 
 // Bulk CBC Reports (Single, Selected IDs, or Entire Class/Stream)
-Route::middleware(['auth'])->group(function () {
-    Route::match(['get', 'post'], 'school/reports/cbc/bulk', [\App\Http\Controllers\SchoolAdmin\ReportController::class, 'bulkCbcReportCards'])
-        ->name('school.reports.cbc.bulk');
-});
 
-Route::middleware(['auth'])->group(function () {
-    Route::get('school/fees/reports/export-pdf', [\App\Http\Controllers\SchoolAdmin\FinancialReportController::class, 'exportPdf'])
-        ->name('school.fees.reports.export-pdf');
-});
+

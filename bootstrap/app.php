@@ -11,7 +11,25 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->trustProxies(at: '*');
+                $trustedProxies = env('TRUSTED_PROXIES');
+        if ($trustedProxies) {
+            $proxies = array_filter(array_map('trim', explode(',', $trustedProxies)));
+                    $trustedProxies = env('TRUSTED_PROXIES');
+        if ($trustedProxies) {
+            $proxies = array_filter(array_map('trim', explode(',', $trustedProxies)));
+            $middleware->trustProxies(at: $proxies);
+        } else {
+            $middleware->trustProxies(at: []);
+        }
+        } else {
+                    $trustedProxies = env('TRUSTED_PROXIES');
+        if ($trustedProxies) {
+            $proxies = array_filter(array_map('trim', explode(',', $trustedProxies)));
+            $middleware->trustProxies(at: $proxies);
+        } else {
+            $middleware->trustProxies(at: []);
+        }
+        }
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,

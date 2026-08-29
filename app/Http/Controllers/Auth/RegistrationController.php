@@ -325,7 +325,7 @@ class RegistrationController extends Controller
                 'email'             => $data['email'],
                 'phone'             => $data['phone'] ?? null,
                 'password'          => Hash::make($data['password']),
-                'email_verified_at' => now(),
+                'email_verified_at' => null,
                 'status'            => 'active',
             ]);
 

@@ -38,4 +38,8 @@ class DatabaseSeeder extends Seeder
             BlogPostSeeder::class,
         ]);
     }
-}
+        // Auto-verify all seeded users to bypass email verification
+        \App\Models\User::withoutGlobalScopes()
+            ->whereNull('email_verified_at')
+            ->update(['email_verified_at' => now()]);
+    }

@@ -665,10 +665,6 @@ class ReportController extends Controller
         return (int) $schoolId;
     }
 
-    
-        return response()->json(['status' => 'ok']);
-    }
-
     /**
      * Display or Download CBC Printable Report Card with dynamic templates & analytics.
      */

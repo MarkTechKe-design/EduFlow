@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
 import type { PageProps, Student, SchoolClass, Section } from '@/Types';
+import CbcBatchActions from '@/Components/CbcBatchActions';
 import { Button } from '@/Components/ui/button';
 import { formatDate } from '@/lib/utils';
 import { Input } from '@/Components/ui/input';
@@ -56,7 +57,20 @@ export default function StudentIndex({
     const [search, setSearch] = useState(filters.search || '');
     const [classId, setClassId] = useState(filters.class_id || 'all');
     const [sectionId, setSectionId] = useState(filters.section_id || 'all');
-    const [status, setStatus] = useState(filters.status || 'all');
+        const [status, setStatus] = useState(filters.status || 'all');
+    const [selectedStudentIds, setSelectedStudentIds] = useState<(number | string)[]>([]);
+
+    const toggleStudent = (id: number | string) => {
+        setSelectedStudentIds(prev => prev.includes(id) ? prev.filter(sId => sId !== id) : [...prev, id]);
+    };
+
+    const toggleAllStudents = () => {
+        if (selectedStudentIds.length === students.data.length) {
+            setSelectedStudentIds([]);
+        } else {
+            setSelectedStudentIds(students.data.map(s => s.id));
+        }
+    };
 
     const filteredSections = classId && classId !== 'all'
         ? sections.filter((s) => String(s.class_id) === String(classId))
@@ -200,6 +214,16 @@ export default function StudentIndex({
                     </div>
                 </div>
 
+                                {/* Batch Report Actions Bar */}
+                <div className="mb-4">
+                    <CbcBatchActions 
+                        selectedStudentIds={selectedStudentIds}
+                        activeClassId={classId !== 'all' ? classId : null}
+                        activeSectionId={sectionId !== 'all' ? sectionId : null}
+                        totalClassStudentsCount={students.total}
+                    />
+                </div>
+
                 {/* Search & Filter Toolbar */}
                 <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
                     <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -279,8 +303,16 @@ export default function StudentIndex({
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs">
-                            <thead>
+                                                        <thead>
                                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 font-semibold uppercase tracking-wider">
+                                    <th className="py-3 px-4 w-10 text-center">
+                                        <input 
+                                            type="checkbox" 
+                                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                            checked={students.data.length > 0 && selectedStudentIds.length === students.data.length}
+                                            onChange={toggleAllStudents}
+                                        />
+                                    </th>
                                     <th className="py-3 px-4">Learner Identity</th>
                                     <th className="py-3 px-4">Identifiers (Adm / UPI)</th>
                                     <th className="py-3 px-4">Class & Stream</th>
@@ -295,8 +327,17 @@ export default function StudentIndex({
                                         const fullName = student.full_name || [student.first_name, student.middle_name, student.last_name].filter(Boolean).join(' ');
                                         const initials = (student.first_name?.[0] || '') + (student.last_name?.[0] || '');
 
-                                        return (
+                                                                                return (
                                             <tr key={student.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                                <td className="py-3 px-4 text-center">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                                        value={student.id}
+                                                        checked={selectedStudentIds.includes(student.id)}
+                                                        onChange={() => toggleStudent(student.id)}
+                                                    />
+                                                </td>
                                                 {/* Learner Identity */}
                                                 <td className="py-3 px-4">
                                                     <div className="flex items-center gap-3">

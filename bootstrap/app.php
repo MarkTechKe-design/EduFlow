@@ -18,10 +18,13 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->alias([
-            'active' => \App\Http\Middleware\EnsureUserIsActive::class,
-            'module' => \App\Http\Middleware\EnsureModuleEnabled::class,
-            'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
-            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'active'             => \App\Http\Middleware\EnsureUserIsActive::class,
+            'active.account'     => \App\Http\Middleware\EnsureActiveAccount::class,
+            'module'             => \App\Http\Middleware\EnsureModuleEnabled::class,
+            'school-role'        => \App\Http\Middleware\EnsureSchoolRoleAccess::class,
+            'school.onboarded'   => \App\Http\Middleware\EnsureSchoolIsOnboarded::class,
+            'role'               => \Spatie\Permission\Middleware\RoleMiddleware::class,
+            'permission'         => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
     })

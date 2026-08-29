@@ -21,6 +21,21 @@ interface SchoolsPageProps extends PageProps {
     stats: { total: number; active: number; suspended: number };
 }
 
+const verificationBadge = (status?: string) => {
+    const map: Record<string, string> = {
+        verified: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800',
+        pending: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-300 dark:border-amber-800',
+        rejected: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400 border border-red-300 dark:border-red-800',
+        suspended: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 border border-slate-300 dark:border-slate-700',
+    };
+    const val = status || 'pending';
+    return (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[val] ?? map.pending}`}>
+            {val.charAt(0).toUpperCase() + val.slice(1)}
+        </span>
+    );
+};
+
 const statusBadge = (status: string) => {
     const map: Record<string, string> = {
         active:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400',
@@ -103,13 +118,29 @@ export default function SchoolsIndex() {
                         value={filters.status ?? 'all'}
                         onValueChange={(v) => applyFilters({ status: v === 'all' ? '' : v })}
                     >
-                        <SelectTrigger className="w-36 h-9">
-                            <SelectValue placeholder="All status" />
+                        <SelectTrigger className="w-32 h-9">
+                            <SelectValue placeholder="Account status" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">All status</SelectItem>
+                            <SelectItem value="all">All Status</SelectItem>
                             <SelectItem value="active">Active</SelectItem>
                             <SelectItem value="inactive">Inactive</SelectItem>
+                            <SelectItem value="suspended">Suspended</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Select
+                        value={(filters as any).verification_status ?? 'all'}
+                        onValueChange={(v) => applyFilters({ verification_status: v === 'all' ? '' : v })}
+                    >
+                        <SelectTrigger className="w-36 h-9">
+                            <SelectValue placeholder="Verification" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Verification</SelectItem>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="verified">Verified</SelectItem>
+                            <SelectItem value="rejected">Rejected</SelectItem>
                             <SelectItem value="suspended">Suspended</SelectItem>
                         </SelectContent>
                     </Select>
@@ -124,6 +155,7 @@ export default function SchoolsIndex() {
                             <TableHead>Location</TableHead>
                             <TableHead>Users</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead>Verification</TableHead>
                             <TableHead>Created</TableHead>
                             <TableHead className="w-10" />
                         </TableRow>
@@ -163,6 +195,7 @@ export default function SchoolsIndex() {
                                     {school.users_count ?? 0}
                                 </TableCell>
                                 <TableCell>{statusBadge(school.status)}</TableCell>
+                                <TableCell>{verificationBadge((school as any).verification_status)}</TableCell>
                                 <TableCell className="text-xs text-slate-400">
                                     {new Date(school.created_at).toLocaleDateString()}
                                 </TableCell>

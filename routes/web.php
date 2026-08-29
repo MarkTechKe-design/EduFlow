@@ -361,7 +361,12 @@ Route::middleware(['auth', 'verified', 'active', 'module', 'school-role', 'role:
         Route::put('/hr/salary-structure/{staff}', [\App\Http\Controllers\SchoolAdmin\PayrollController::class, 'saveStructure'])->middleware('permission:payroll.generate')->name('hr.salary-structure.update');
 
         // Library
-        Route::get('/library/books', [\App\Http\Controllers\SchoolAdmin\LibraryController::class, 'index'])->middleware('permission:library.view')->name('library.index');
+        
+    // Library Bulk Actions & Exports
+    Route::get('/library/books/export', [\App\Http\Controllers\SchoolAdmin\LibraryController::class, 'exportCsv'])->name('library.books.export');
+    Route::get('/library/books/template', [\App\Http\Controllers\SchoolAdmin\LibraryController::class, 'downloadTemplate'])->name('library.books.template');
+    Route::post('/library/books/import', [\App\Http\Controllers\SchoolAdmin\LibraryController::class, 'importCsv'])->name('library.books.import');
+    Route::get('/library/books', [\App\Http\Controllers\SchoolAdmin\LibraryController::class, 'index'])->middleware('permission:library.view')->name('library.index');
         Route::post('/library/books', [\App\Http\Controllers\SchoolAdmin\LibraryController::class, 'storeBook'])->middleware('permission:library.manage')->name('library.books.store');
         Route::put('/library/books/{book}', [\App\Http\Controllers\SchoolAdmin\LibraryController::class, 'updateBook'])->middleware('permission:library.manage')->name('library.books.update');
         Route::delete('/library/books/{book}', [\App\Http\Controllers\SchoolAdmin\LibraryController::class, 'destroyBook'])->middleware('permission:library.manage')->name('library.books.destroy');
@@ -374,7 +379,12 @@ Route::middleware(['auth', 'verified', 'active', 'module', 'school-role', 'role:
         Route::get('/inventory/categories', [\App\Http\Controllers\SchoolAdmin\InventoryController::class, 'categories'])->middleware('permission:inventory.view')->name('inventory.categories');
         Route::post('/inventory/categories', [\App\Http\Controllers\SchoolAdmin\InventoryController::class, 'storeCategory'])->middleware('permission:inventory.manage')->name('inventory.categories.store');
         Route::delete('/inventory/categories/{inventoryCategory}', [\App\Http\Controllers\SchoolAdmin\InventoryController::class, 'destroyCategory'])->middleware('permission:inventory.manage')->name('inventory.categories.destroy');
-        Route::get('/inventory/items', [\App\Http\Controllers\SchoolAdmin\InventoryController::class, 'items'])->middleware('permission:inventory.view')->name('inventory.items');
+        
+    // Inventory Bulk Actions & Exports
+    Route::get('/inventory/items/export', [\App\Http\Controllers\SchoolAdmin\InventoryController::class, 'exportCsv'])->name('inventory.items.export');
+    Route::get('/inventory/items/template', [\App\Http\Controllers\SchoolAdmin\InventoryController::class, 'downloadTemplate'])->name('inventory.items.template');
+    Route::post('/inventory/items/import', [\App\Http\Controllers\SchoolAdmin\InventoryController::class, 'importCsv'])->name('inventory.items.import');
+    Route::get('/inventory/items', [\App\Http\Controllers\SchoolAdmin\InventoryController::class, 'items'])->middleware('permission:inventory.view')->name('inventory.items');
         Route::post('/inventory/items', [\App\Http\Controllers\SchoolAdmin\InventoryController::class, 'storeItem'])->middleware('permission:inventory.manage')->name('inventory.items.store');
         Route::put('/inventory/items/{inventoryItem}', [\App\Http\Controllers\SchoolAdmin\InventoryController::class, 'updateItem'])->middleware('permission:inventory.manage')->name('inventory.items.update');
         Route::delete('/inventory/items/{inventoryItem}', [\App\Http\Controllers\SchoolAdmin\InventoryController::class, 'destroyItem'])->middleware('permission:inventory.manage')->name('inventory.items.destroy');
@@ -523,7 +533,10 @@ Route::middleware(['auth', 'active', 'role:super-admin'])->prefix('super-admin')
     Route::get('/dashboard', [\App\Http\Controllers\SuperAdmin\DashboardController::class, 'index'])->name('dashboard');
     Route::resource('schools', \App\Http\Controllers\SuperAdmin\SchoolController::class);
     Route::match(['post', 'patch'], '/schools/{school}/suspend', [\App\Http\Controllers\SuperAdmin\SchoolController::class, 'suspend'])->name('schools.suspend');
-    Route::match(['post', 'patch'], '/schools/{school}/activate', [\App\Http\Controllers\SuperAdmin\SchoolController::class, 'activate'])->name('schools.activate');
+        Route::match(['post', 'patch'], '/schools/{school}/activate', [\App\Http\Controllers\SuperAdmin\SchoolController::class, 'activate'])->name('schools.activate');
+    Route::post('/schools/{school}/verify', [\App\Http\Controllers\SuperAdmin\SchoolController::class, 'verify'])->name('schools.verify');
+    Route::post('/schools/{school}/reject', [\App\Http\Controllers\SuperAdmin\SchoolController::class, 'reject'])->name('schools.reject');
+    Route::post('/schools/{school}/verification-notes', [\App\Http\Controllers\SuperAdmin\SchoolController::class, 'updateVerificationNotes'])->name('schools.verification-notes');
 
     Route::get('/settings', [\App\Http\Controllers\SuperAdmin\SettingsController::class, 'index'])->name('settings.index');
     Route::post('/settings/general', [\App\Http\Controllers\SuperAdmin\SettingsController::class, 'saveGeneral'])->name('settings.general');

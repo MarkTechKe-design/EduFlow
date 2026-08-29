@@ -24,6 +24,7 @@ class SchoolController extends Controller
             ->withCount('users')->with(['latestSubscription.package'])
             ->when($request->search, fn ($q) => $q->where('name', 'like', "%{$request->search}%"))
             ->when($request->status, fn ($q) => $q->where('status', $request->status))
+            ->when($request->verification_status, fn ($q) => $q->where('verification_status', $request->verification_status))
             ->latest()
             ->paginate(15)
             ->withQueryString();
@@ -51,6 +52,8 @@ class SchoolController extends Controller
                 'total' => School::count(),
                 'active' => School::where('status', 'active')->count(),
                 'suspended' => School::where('status', 'suspended')->count(),
+                'pending_verification' => School::where('verification_status', 'pending')->count(),
+                'verified' => School::where('verification_status', 'verified')->count(),
             ],
         ]);
     }
@@ -75,7 +78,7 @@ class SchoolController extends Controller
 
     public function show(School $school): Response
     {
-        $school->load(['academicYears' => fn ($q) => $q->latest()]);
+        $school->load(['academicYears' => fn ($q) => $q->latest(), 'verifiedBy:id,name,email']);
         $school->loadCount('users');
 
         return Inertia::render('SuperAdmin/Schools/Show', ['school' => $school]);
@@ -122,5 +125,68 @@ class SchoolController extends Controller
 
         return redirect()->route('super-admin.schools.index')
             ->with('success', 'School deleted.');
+    }
+
+    public function verify(Request $request, School $school): RedirectResponse
+    {
+        $this->authorize('update', $school);
+
+        $school->update([
+            'verification_status' => 'verified',
+            'verified_at' => now(),
+            'verified_by' => auth()->id(),
+        ]);
+
+        if (filled($request->notes)) {
+            $existing = $school->verification_notes ? $school->verification_notes . "\n" : '';
+            $school->update([
+                'verification_notes' => $existing . "[AUDITOR NOTE (" . now()->toDateTimeString() . " - " . auth()->user()->name . ")]: " . trim($request->notes),
+            ]);
+        }
+
+        if (function_exists('activity')) {
+            activity()->causedBy($request->user())->performedOn($school)->log('Institutional verification approved');
+        }
+
+        return back()->with('success', "Institution \"{$school->name}\" marked as Verified.");
+    }
+
+    public function reject(Request $request, School $school): RedirectResponse
+    {
+        $this->authorize('update', $school);
+
+        $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $existing = $school->verification_notes ? $school->verification_notes . "\n" : '';
+        $school->update([
+            'verification_status' => 'rejected',
+            'verified_at' => now(),
+            'verified_by' => auth()->id(),
+            'verification_notes' => $existing . "[REJECTION REASON (" . now()->toDateTimeString() . " - " . auth()->user()->name . ")]: " . trim($request->reason),
+        ]);
+
+        if (function_exists('activity')) {
+            activity()->causedBy($request->user())->performedOn($school)->log('Institutional verification rejected');
+        }
+
+        return back()->with('success', "Institution \"{$school->name}\" verification rejected.");
+    }
+
+    public function updateVerificationNotes(Request $request, School $school): RedirectResponse
+    {
+        $this->authorize('update', $school);
+
+        $request->validate([
+            'notes' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $existing = $school->verification_notes ? $school->verification_notes . "\n" : '';
+        $school->update([
+            'verification_notes' => $existing . "[AUDITOR NOTE (" . now()->toDateTimeString() . " - " . auth()->user()->name . ")]: " . trim($request->notes),
+        ]);
+
+        return back()->with('success', "Verification notes updated for \"{$school->name}\".");
     }
 }

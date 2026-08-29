@@ -99,6 +99,7 @@ class RegistrationController extends Controller
             'sub_county'            => ['required', 'string', 'max:60'],
             'knec_code'             => ['nullable', 'string', 'max:30'],
             'registration_number'   => ['nullable', 'string', 'max:60'],
+            'nemis_code'             => ['nullable', 'string', 'max:60'],
             'school_email'          => ['nullable', 'email', 'max:150'],
             'school_phone'          => ['nullable', 'string', 'max:30'],
             'school_motto'          => ['nullable', 'string', 'max:180'],
@@ -201,6 +202,33 @@ class RegistrationController extends Controller
                 default => 'cbc',
             };
 
+            // Soft Identifier Collision Detection (Audit Flagging)
+            $collisionAlerts = [];
+            $knec = filled($data['knec_code'] ?? null) ? trim((string)$data['knec_code']) : null;
+            $regNo = filled($data['registration_number'] ?? null) ? trim((string)$data['registration_number']) : null;
+            $nemis = filled($data['nemis_code'] ?? null) ? trim((string)$data['nemis_code']) : null;
+
+            if ($knec) {
+                $collidingSchool = School::where('knec_code', $knec)->first(['id', 'name']);
+                if ($collidingSchool) {
+                    $collisionAlerts[] = "[SYSTEM COLLISION ALERT: Claimed KNEC Centre Code matches School #{$collidingSchool->id} ({$collidingSchool->name})]";
+                }
+            }
+            if ($regNo) {
+                $collidingSchool = School::where('registration_number', $regNo)->first(['id', 'name']);
+                if ($collidingSchool) {
+                    $collisionAlerts[] = "[SYSTEM COLLISION ALERT: Claimed MOE Registration Number matches School #{$collidingSchool->id} ({$collidingSchool->name})]";
+                }
+            }
+            if ($nemis) {
+                $collidingSchool = School::where('nemis_code', $nemis)->first(['id', 'name']);
+                if ($collidingSchool) {
+                    $collisionAlerts[] = "[SYSTEM COLLISION ALERT: Claimed NEMIS/UIC Code matches School #{$collidingSchool->id} ({$collidingSchool->name})]";
+                }
+            }
+
+            $verificationNotes = !empty($collisionAlerts) ? implode("\n", $collisionAlerts) : null;
+
             $school = School::create([
                 'name'                    => $data['school_name'],
                 'slug'                    => $slug,
@@ -211,6 +239,9 @@ class RegistrationController extends Controller
                 'sub_county'              => $data['sub_county'],
                 'knec_code'               => $data['knec_code'] ?? null,
                 'registration_number'     => $data['registration_number'] ?? null,
+                'nemis_code'              => $data['nemis_code'] ?? null,
+                'verification_status'     => 'pending',
+                'verification_notes'      => $verificationNotes,
                 'timezone'                => 'Africa/Nairobi',
                 'currency'                => 'KES',
                 'language'                => 'en',

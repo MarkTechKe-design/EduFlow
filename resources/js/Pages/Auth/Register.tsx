@@ -98,6 +98,7 @@ export default function Register({
         sub_county: '',
         knec_code: '',
         registration_number: '',
+        nemis_code: '',
         first_name: '',
         last_name: '',
         email: '',
@@ -475,16 +476,28 @@ export default function Register({
                                         </div>
                                         <div>
                                             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                                                MOE / NEMIS Registration Number
+                                                Ministry Registration Number
                                             </label>
                                             <input
                                                 type="text"
-                                                placeholder="e.g. MOE/PRI/2026/001"
+                                                placeholder="Optional (e.g. MOE/PRI/2026/001)"
                                                 value={form.data.registration_number}
                                                 onChange={(e) => form.setData('registration_number', e.target.value)}
                                                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
                                             />
                                         </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                                            NEMIS / UIC Code
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="Optional — provide if your institution has been issued one"
+                                            value={form.data.nemis_code}
+                                            onChange={(e) => form.setData('nemis_code', e.target.value)}
+                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                                        />
                                     </div>
                                 </div>
                             )}

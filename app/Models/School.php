@@ -4,7 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -19,6 +21,11 @@ class School extends Model
         'settings', 'status', 'curriculum',
         'registration_number',
         'knec_code',
+        'nemis_code',
+        'verification_status',
+        'verification_notes',
+        'verified_at',
+        'verified_by',
         'sub_county',
         'county', 'terms_accepted_at', 'onboarding_completed_at',
     ];
@@ -27,6 +34,7 @@ class School extends Model
         'settings' => 'array',
         'terms_accepted_at' => 'datetime',
         'onboarding_completed_at' => 'datetime',
+        'verified_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -63,12 +71,27 @@ class School extends Model
         return $query->where('status', 'active');
     }
 
-    public function subscriptions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function scopeVerified($query)
+    {
+        return $query->where('verification_status', 'verified');
+    }
+
+    public function scopePendingVerification($query)
+    {
+        return $query->where('verification_status', 'pending');
+    }
+
+    public function verifiedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    public function subscriptions(): HasMany
     {
         return $this->hasMany(SchoolSubscription::class);
     }
 
-    public function latestSubscription(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function latestSubscription(): HasOne
     {
         return $this->hasOne(SchoolSubscription::class)->latestOfMany();
     }

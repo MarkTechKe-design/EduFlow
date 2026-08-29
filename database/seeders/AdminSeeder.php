@@ -36,6 +36,7 @@ class AdminSeeder extends Seeder
             [
                 'name'     => 'Super Admin',
                 'password' => bcrypt('password'),
+                'email_verified_at' => now(),
                 'status'   => 'active',
             ]
         );

@@ -86,6 +86,7 @@ class DemoUserSeeder extends Seeder
                     'name'      => $data['name'],
                     'school_id' => $school->id,
                     'password'  => bcrypt('password'),
+                'email_verified_at' => now(),
                     'status'    => 'active',
                 ]
             );

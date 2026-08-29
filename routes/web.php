@@ -593,3 +593,16 @@ Route::middleware(['auth', 'active'])->group(function () {
 Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/school/homework/{homework}/download', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'download'])->name('school.homework.download');
 });
+
+
+// CBC Learner Report Card & Analytics Route (Print & PDF)
+Route::middleware(['auth'])->group(function () {
+    Route::get('school/students/{student}/cbc-report', [\App\Http\Controllers\SchoolAdmin\ReportController::class, 'cbcReportCard'])
+        ->name('school.students.cbc-report');
+});
+
+// Bulk CBC Reports (Single, Selected IDs, or Entire Class/Stream)
+Route::middleware(['auth'])->group(function () {
+    Route::match(['get', 'post'], 'school/reports/cbc/bulk', [\App\Http\Controllers\SchoolAdmin\ReportController::class, 'bulkCbcReportCards'])
+        ->name('school.reports.cbc.bulk');
+});

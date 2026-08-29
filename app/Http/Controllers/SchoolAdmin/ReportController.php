@@ -674,5 +674,139 @@ class ReportController extends Controller
         }
         return response()->json(['status' => 'ok']);
     }
-}
 
+    /**
+     * Display or Download CBC Printable Report Card with dynamic templates & analytics.
+     */
+    public function cbcReportCard(\Illuminate\Http\Request $request, \App\Models\Student $student)
+    {
+        $academicYearId = $request->input('academic_year_id') ? (int)$request->input('academic_year_id') : null;
+        $term = $request->input('term', 'Term 1');
+        $template = $request->input('template', 'executive');
+
+        $reportService = new \App\Services\AcademicReportService();
+        $reportData = $reportService->forCbcStudentReport($student, $academicYearId, $term, $template);
+
+        if ($request->input('export') === 'pdf') {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.cbc.master-cbc-report', $reportData)
+                ->setPaper('a4', 'portrait')
+                ->setOptions([
+                    'isHtml5ParserEnabled' => true,
+                    'isRemoteEnabled'      => true,
+                    'defaultFont'          => 'sans-serif',
+                ]);
+
+            $fileName = 'CBC-Report-' . str_replace(' ', '-', $student->admission_no) . '.pdf';
+            return $pdf->stream($fileName);
+        }
+
+        return view('reports.cbc.master-cbc-report', $reportData);
+    }
+
+    /**
+     * Bulk CBC Report Card Generator (Single, Selected Students, or Entire Class/Stream).
+     */
+    public function bulkCbcReportCards(\Illuminate\Http\Request $request)
+    {
+        $schoolId = auth()->user()->school_id ?? 1;
+        $academicYearId = $request->input('academic_year_id') ? (int)$request->input('academic_year_id') : null;
+        $term = $request->input('term', 'Term 1');
+        $template = $request->input('template', 'executive');
+        $export = $request->input('export');
+
+        // 1. Resolve Target Students
+        $query = \App\Models\Student::withoutGlobalScopes()->where('school_id', $schoolId);
+
+        if ($request->filled('student_ids')) {
+            $ids = is_array($request->input('student_ids')) 
+                ? $request->input('student_ids') 
+                : explode(',', (string)$request->input('student_ids'));
+            $query->whereIn('id', array_filter(array_map('intval', $ids)));
+            $batchTitle = 'Selected Learners (' . count($ids) . ')';
+        } elseif ($request->filled('section_id')) {
+            $section = \App\Models\Section::withoutGlobalScopes()->find($request->input('section_id'));
+            $query->where('section_id', $request->input('section_id'));
+            $batchTitle = ($section ? $section->name : 'Stream') . ' Batch';
+        } elseif ($request->filled('class_id')) {
+            $class = \App\Models\SchoolClass::withoutGlobalScopes()->find($request->input('class_id'));
+            $query->where('class_id', $request->input('class_id'));
+            $batchTitle = ($class ? $class->name : 'Class') . ' Cohort';
+        } else {
+            // Default: first available class
+            $firstClass = \App\Models\SchoolClass::withoutGlobalScopes()->where('school_id', $schoolId)->first();
+            if ($firstClass) {
+                $query->where('class_id', $firstClass->id);
+                $batchTitle = $firstClass->name . ' Cohort';
+            } else {
+                $query->limit(20);
+                $batchTitle = 'School Learners Batch';
+            }
+        }
+
+        $students = $query->orderBy('admission_no')->get();
+
+        if ($students->isEmpty()) {
+            return redirect()->back()->with('error', 'No student records matched the specified batch criteria.');
+        }
+
+        // 2. Compile Report Payloads via AcademicReportService
+        $reportService = new \App\Services\AcademicReportService();
+        $reports = [];
+        foreach ($students as $st) {
+            $reports[] = $reportService->forCbcStudentReport($st, $academicYearId, $term, $template);
+        }
+
+        // 3. Option A: Export ZIP Archive of Individual PDFs
+        if ($export === 'zip') {
+            $zipFileName = 'CBC-Reports-' . \Illuminate\Support\Str::slug($batchTitle) . '-' . date('Ymd_His') . '.zip';
+            $zipPath = storage_path('app/' . $zipFileName);
+
+            $zip = new \ZipArchive();
+            if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+                foreach ($reports as $rep) {
+                    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.cbc.master-cbc-report', $rep)
+                        ->setPaper('a4', 'portrait')
+                        ->setOptions([
+                            'isHtml5ParserEnabled' => true,
+                            'isRemoteEnabled'      => true,
+                            'defaultFont'          => 'sans-serif',
+                        ]);
+
+                    $cleanAdm = preg_replace('/[^A-Za-z0-9_\-]/', '_', $rep['student']['admission_no']);
+                    $cleanName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $rep['student']['full_name']);
+                    $fileInZip = "{$cleanAdm}_{$cleanName}_CBC_Report.pdf";
+                    $zip->addFromString($fileInZip, $pdf->output());
+                }
+                $zip->close();
+
+                return response()->download($zipPath)->deleteFileAfterSend(true);
+            }
+        }
+
+        // 4. Option B: Export Single Combined Multi-Page PDF
+        if ($export === 'pdf_combined') {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.cbc.bulk-cbc-report', [
+                'reports'     => $reports,
+                'batch_title' => $batchTitle,
+                'template'    => $template,
+                'is_pdf'      => true,
+            ])->setPaper('a4', 'portrait')
+              ->setOptions([
+                  'isHtml5ParserEnabled' => true,
+                  'isRemoteEnabled'      => true,
+                  'defaultFont'          => 'sans-serif',
+              ]);
+
+            $pdfName = 'Combined-CBC-Reports-' . \Illuminate\Support\Str::slug($batchTitle) . '.pdf';
+            return $pdf->stream($pdfName);
+        }
+
+        // 5. Default: Render Print-Ready Interactive Multi-Report HTML
+        return view('reports.cbc.bulk-cbc-report', [
+            'reports'     => $reports,
+            'batch_title' => $batchTitle,
+            'template'    => $template,
+            'is_pdf'      => false,
+        ]);
+    }
+}

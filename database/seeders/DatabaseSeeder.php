@@ -2,13 +2,14 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\User;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
+    /**
+     * Seed the application's database.
+     */
     public function run(): void
     {
         $this->call([
@@ -37,10 +38,10 @@ class DatabaseSeeder extends Seeder
             CommunicationSeeder::class,
             BlogPostSeeder::class,
         ]);
-    }
-        // Auto-verify all seeded users to bypass email verification
-        \App\Models\User::withoutGlobalScopes()
+
+        // Auto-verify all seeded users to bypass email verification prompts
+        User::withoutGlobalScopes()
             ->whereNull('email_verified_at')
             ->update(['email_verified_at' => now()]);
-        \App\Models\User::withoutGlobalScopes()->whereNull('email_verified_at')->update(['email_verified_at' => now()]);
     }
+}

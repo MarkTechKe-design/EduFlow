@@ -278,7 +278,7 @@ class CoCurricularService
             ->where('school_id', $schoolId)
             ->where('is_active', true)
             ->orderByDesc('total_points')
-            ->first(['name', 'total_points', 'color_hex']);
+            ->first();
 
         $recentAchievementsCount = StudentAchievement::withoutGlobalScopes()
             ->where('school_id', $schoolId)

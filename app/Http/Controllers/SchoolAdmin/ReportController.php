@@ -670,6 +670,7 @@ class ReportController extends Controller
      */
     public function cbcReportCard(\Illuminate\Http\Request $request, \App\Models\Student $student)
     {
+        $this->ensureAuthorized('academic');
         $schoolId = $this->getSchoolId();
         if ((int) $student->school_id !== $schoolId) {
             abort(403, 'Unauthorized access to student report in another institution.');
@@ -702,7 +703,8 @@ class ReportController extends Controller
      */
     public function bulkCbcReportCards(\Illuminate\Http\Request $request)
     {
-        $schoolId = $this->getSchoolId();
+
+        $this->ensureAuthorized('academic');        $schoolId = $this->getSchoolId();
         $academicYearId = $request->input('academic_year_id') ? (int)$request->input('academic_year_id') : null;
         $term = $request->input('term', 'Term 1');
         $template = $request->input('template', 'executive');
@@ -802,5 +804,65 @@ class ReportController extends Controller
             'template'    => $template,
             'is_pdf'      => false,
         ]);
+    }
+
+    protected function ensureAuthorized($ability = 'view', $arguments = []): void
+    {
+        $user = auth()->user();
+        if (! $user) {
+            abort(401);
+        }
+
+        if ($user->hasRole('super-admin')) {
+            return;
+        }
+
+        if ($ability instanceof \Illuminate\Http\Request) {
+            $path = $ability->path();
+            $ability = match (true) {
+                str_contains($path, 'custom') => 'custom',
+                str_contains($path, 'export') => 'export',
+                str_contains($path, 'academic') => 'academic',
+                default => 'view',
+            };
+        } elseif (is_string($ability) && str_contains($ability, 'HTTP/')) {
+            $ability = match (true) {
+                str_contains($ability, 'custom') => 'custom',
+                str_contains($ability, 'export') => 'export',
+                str_contains($ability, 'academic') => 'academic',
+                default => 'view',
+            };
+        }
+
+        $permMap = [
+            'custom'   => 'reports.custom',
+            'export'   => 'reports.export',
+            'view'     => 'reports.view',
+            'academic' => 'reports.academic',
+        ];
+
+        $perm = $permMap[$ability] ?? "reports.{$ability}";
+
+        try {
+            if ($user->hasPermissionTo($perm) || $user->hasRole('school-admin') || $user->hasRole('principal')) {
+                return;
+            }
+        } catch (\Throwable $e) {
+            if ($user->hasRole('school-admin') || $user->hasRole('principal')) {
+                return;
+            }
+        }
+
+        if (method_exists($this, 'authorize')) {
+            try {
+                if ($user->can($ability, static::class)) {
+                    return;
+                }
+            } catch (\Throwable $e) {
+                // fall through
+            }
+        }
+
+        abort(403, 'Unauthorized report action.');
     }
 }

@@ -18,7 +18,7 @@ class DashboardController extends Controller
 {
     public function index(Request $request): Response
     {
-        $schoolId = $this->getSchoolId() ?? ($request->user()?->school_id ?? 1);
+        $schoolId = $this->getSchoolId();
         $school = School::withoutGlobalScopes()->find($schoolId);
 
         // 1. Enrollment & Staff Metrics
@@ -27,14 +27,14 @@ class DashboardController extends Controller
             ->where(function ($q) {
                 $q->where('status', 'active')->orWhereNull('status');
             })
-            ->count() ?: 76;
+            ->count();
 
         $staffCount = Staff::withoutGlobalScopes()
             ->where('school_id', $schoolId)
             ->where(function ($q) {
                 $q->where('status', 'active')->orWhereNull('status');
             })
-            ->count() ?: 40;
+            ->count();
 
         // 2. Attendance & Today's Percentage
         $latestAttendanceDate = Attendance::withoutGlobalScopes()
@@ -56,7 +56,7 @@ class DashboardController extends Controller
         // 3. Term Fee Collections & Breakdown
         $termCollected = (float) FeePayment::withoutGlobalScopes()
             ->where('school_id', $schoolId)
-            ->sum('amount_paid') ?: 1578500.0;
+            ->sum('amount_paid');
 
         $structureSum = (float) DB::table('fee_structures')
             ->where('school_id', $schoolId)
@@ -82,8 +82,8 @@ class DashboardController extends Controller
             : 3;
 
         $cocurricularSummary = [
-            'active_teams_count'        => $teamsCount ?: 4,
-            'active_clubs_count'        => $clubsCount ?: 6,
+            'active_teams_count'        => $teamsCount,
+            'active_clubs_count'        => $clubsCount,
             'upcoming_events_count'     => 2,
             'leading_house'             => [
                 'name'         => 'Simba House',

@@ -18,89 +18,54 @@ class PaymentProcessingService
      */
     public static function processIncomingPayment(int $schoolId, array $normalizedData, ?User $operator = null): array
     {
-        $refCode = $normalizedData['reference_code'];
+        $refCode = trim((string) ($normalizedData['reference_code'] ?? ''));
+        $amount = (float) ($normalizedData['amount'] ?? 0);
+        abort_unless($schoolId > 0 && $refCode !== '' && $amount > 0, 422, 'Invalid payment transaction.');
 
-        // 1. Strict Idempotency Check: Prevent duplicate webhook double-crediting
-        $alreadyInLedger = FeeLedgerEntry::withoutGlobalScopes()
-            ->where('school_id', $schoolId)
-            ->where('reference_number', $refCode)
-            ->exists();
+        return DB::transaction(function () use ($schoolId, $normalizedData, $operator, $refCode, $amount): array {
+            School::withoutGlobalScopes()->whereKey($schoolId)->lockForUpdate()->firstOrFail();
 
-        $alreadyInUnallocated = UnallocatedPayment::withoutGlobalScopes()
-            ->where('school_id', $schoolId)
-            ->where('reference_code', $refCode)
-            ->exists();
+            $alreadyProcessed = FeeLedgerEntry::withoutGlobalScopes()
+                ->where('school_id', $schoolId)->where('reference_number', $refCode)->exists()
+                || UnallocatedPayment::withoutGlobalScopes()
+                    ->where('school_id', $schoolId)->where('reference_code', $refCode)->exists();
+            if ($alreadyProcessed) {
+                return ['status' => 'duplicate', 'payment' => null, 'message' => "Transaction reference #{$refCode} has already been processed."];
+            }
 
-        if ($alreadyInLedger || $alreadyInUnallocated) {
-            return [
-                'status'  => 'duplicate',
-                'payment' => null,
-                'message' => "Transaction reference #{$refCode} has already been processed.",
-            ];
-        }
+            $accountRef = trim((string) ($normalizedData['account_ref'] ?? ''));
+            $matchedStudent = ! empty($accountRef)
+                ? Student::withoutGlobalScopes()->where('school_id', $schoolId)->where(function ($q) use ($accountRef) {
+                    $q->where('admission_no', $accountRef)->orWhere('admission_no', 'like', "%{$accountRef}%")
+                        ->orWhere('assessment_no', $accountRef)->orWhere('nemis_upi', $accountRef);
+                })->first()
+                : null;
 
-        // 2. Search for matching Student via AccountReference / BillRefNumber
-        $accountRef = trim($normalizedData['account_ref']);
-        $matchedStudent = null;
+            if ($matchedStudent) {
+                $payment = StudentLedgerService::allocatePayment($matchedStudent, $amount, $refCode, 'mpesa', [], $operator,
+                    "Automated M-Pesa C2B from " . ($normalizedData['payer_name'] ?? 'Unknown payer') . " (" . ($normalizedData['payer_phone'] ?? 'unknown') . ")");
+                return ['status' => 'allocated', 'student' => $matchedStudent, 'payment' => $payment,
+                    'message' => "Payment allocated successfully to {$matchedStudent->first_name} {$matchedStudent->last_name} ({$matchedStudent->admission_no})."];
+            }
 
-        if (!empty($accountRef)) {
-            $matchedStudent = Student::withoutGlobalScopes()
-                ->where('school_id', $schoolId)
-                ->where(function ($q) use ($accountRef) {
-                    $q->where('admission_no', $accountRef)
-                      ->orWhere('admission_no', 'like', "%{$accountRef}%")
-                      ->orWhere('assessment_no', $accountRef)
-                      ->orWhere('nemis_upi', $accountRef);
-                })
-                ->first();
-        }
-
-        // 3. Matched: Allocate directly to Student Ledger
-        if ($matchedStudent) {
-            $payment = StudentLedgerService::allocatePayment(
-                $matchedStudent,
-                $normalizedData['amount'],
-                $refCode,
-                'mpesa',
-                [],
-                $operator,
-                "Automated M-Pesa C2B from {$normalizedData['payer_name']} ({$normalizedData['payer_phone']})"
-            );
-
-            return [
-                'status'  => 'allocated',
-                'student' => $matchedStudent,
-                'payment' => $payment,
-                'message' => "Payment allocated successfully to {$matchedStudent->first_name} {$matchedStudent->last_name} ({$matchedStudent->admission_no}).",
-            ];
-        }
-
-        // 4. Unmatched / Ambiguous: Route to Bursar Unallocated Queue
-        $unallocated = UnallocatedPayment::withoutGlobalScopes()->create([
-            'school_id'              => $schoolId,
-            'reference_code'         => $refCode,
-            'channel'                => 'mpesa',
-            'amount'                 => $normalizedData['amount'],
-            'payer_name'             => $normalizedData['payer_name'],
-            'payer_phone'            => $normalizedData['payer_phone'],
-            'bill_reference_entered' => $accountRef,
-            'payment_date'           => $normalizedData['payment_date'],
-            'raw_payload'            => $normalizedData['raw_payload'],
-            'status'                 => 'unallocated',
-        ]);
-
-        return [
-            'status'      => 'unallocated',
-            'unallocated' => $unallocated,
-            'message'     => "Account reference '{$accountRef}' unmatched. Queued for Bursar review.",
-        ];
+            $unallocated = UnallocatedPayment::withoutGlobalScopes()->create([
+                'school_id' => $schoolId, 'reference_code' => $refCode, 'channel' => 'mpesa', 'amount' => $amount,
+                'payer_name' => $normalizedData['payer_name'] ?? null, 'payer_phone' => $normalizedData['payer_phone'] ?? null,
+                'bill_reference_entered' => $accountRef, 'payment_date' => $normalizedData['payment_date'] ?? now(),
+                'raw_payload' => $normalizedData['raw_payload'] ?? [], 'status' => 'unallocated',
+            ]);
+            return ['status' => 'unallocated', 'unallocated' => $unallocated,
+                'message' => "Account reference '{$accountRef}' unmatched. Queued for Bursar review."];
+        });
     }
-
     /**
      * Bursar Manual Allocation of Unallocated Payment to a Student.
      */
     public static function resolveUnallocatedPayment(UnallocatedPayment $unallocated, Student $student, User $bursar, ?string $notes = null): FeePayment
     {
+        abort_unless((int) $unallocated->school_id === (int) $student->school_id
+            && (int) $bursar->school_id === (int) $student->school_id, 403, 'Tenant mismatch.');
+
         return DB::transaction(function () use ($unallocated, $student, $bursar, $notes) {
             // Pessimistically lock row for update to prevent concurrent duplicate resolution
             $locked = UnallocatedPayment::where('id', $unallocated->id)

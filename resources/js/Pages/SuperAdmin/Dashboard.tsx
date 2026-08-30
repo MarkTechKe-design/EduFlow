@@ -6,15 +6,16 @@ import {
     School,
     Users,
     ShieldCheck,
-    Plus,
-    Activity,
-    CheckCircle2,
+    CreditCard,
+    TrendingUp,
     Clock,
-    Ban,
+    AlertTriangle,
     ArrowRight,
-    Server,
     Building2,
-    Lock,
+    DollarSign,
+    Sparkles,
+    Calendar,
+    Activity,
 } from 'lucide-react';
 import {
     ResponsiveContainer,
@@ -33,6 +34,19 @@ interface Props {
     trialSchools?: number;
     suspendedSchools?: number;
     totalUsers?: number;
+    totalRevenue?: number;
+    revenueThisMonth?: number;
+    revenueTrend?: Array<{
+        month: string;
+        revenue: number;
+    }>;
+    expiringSubscriptions?: Array<{
+        id: number;
+        school: string;
+        package: string;
+        end_date: string;
+        days_left: number;
+    }>;
     recentSchools?: Array<{
         id: number;
         name: string;
@@ -61,302 +75,286 @@ export default function SuperAdminDashboard({
     trialSchools = 0,
     suspendedSchools = 0,
     totalUsers = 0,
+    totalRevenue = 0,
+    revenueThisMonth = 0,
+    revenueTrend = [],
+    expiringSubscriptions = [],
     recentSchools = [],
     recentAuditLogs = [],
     growthChart = [],
 }: Props) {
-    const hasGrowthData = growthChart.length > 0;
-    const hasSchools = recentSchools.length > 0;
-    const hasAuditLogs = recentAuditLogs.length > 0;
-
     return (
-        <AppLayout title="Super Admin Command Center">
-            <div className="space-y-6 max-w-7xl mx-auto pb-10">
-                {/* 1. Platform Command Header & Multi-Tenant Telemetry Strip */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-border/60">
-                    <div className="space-y-1.5">
+        <AppLayout title="Platform Command Center">
+            <div className="h-full overflow-y-auto p-4 md:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
+                {/* PAGE HEADER */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
                         <div className="flex items-center gap-2.5">
-                            <span
-                                className="w-2.5 h-2.5 rounded-full bg-teal-500 ring-4 ring-teal-500/20 animate-pulse"
-                                aria-hidden="true"
-                            />
-                            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
-                                Platform Command Center
-                            </h1>
-                        </div>
-
-                        {/* Multi-Tenant Global Telemetry */}
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground font-medium">
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-muted/60 border border-border/50">
-                                <Server className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-                                Multi-Tenant: <strong className="text-foreground">{totalSchools} Institutions</strong>
+                            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                <ShieldCheck className="h-6 w-6" />
                             </span>
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-muted/60 border border-border/50">
-                                <Users className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" aria-hidden="true" />
-                                Platform Users: <strong className="text-foreground">{totalUsers.toLocaleString()}</strong>
-                            </span>
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-200/80 text-emerald-700 dark:text-emerald-300">
-                                <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
-                                <span>Platform Operational</span>
-                            </span>
+                            <div>
+                                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                                    Platform Command Center
+                                </h1>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    Global multi-tenant analytics, SaaS recurring billing, and institutional status.
+                                </p>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2.5 shrink-0">
+                    <div className="flex items-center gap-2.5">
                         <Link
-                            href="/super-admin/schools/create"
-                            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition-all shadow-xs hover:shadow-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 min-h-[44px]"
+                            href="/super-admin/subscriptions"
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-teal-500 text-slate-950 px-4 py-2.5 text-xs font-bold hover:bg-teal-400 transition-colors shadow-sm"
                         >
-                            <Plus className="w-4 h-4 shrink-0" aria-hidden="true" />
-                            <span>Provision New School</span>
+                            <CreditCard className="h-4 w-4" /> Manage Subscriptions
+                        </Link>
+                        <Link
+                            href="/super-admin/packages"
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-slate-400 transition-colors"
+                        >
+                            <Sparkles className="h-4 w-4" /> Package Tiers
                         </Link>
                     </div>
                 </div>
 
-                {/* 2. Platform Scale & Health Metrics */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <MetricCard
-                        title="Total Institutions"
-                        value={totalSchools}
-                        icon={Building2}
-                        variant="primary"
-                        badge="Tenants"
-                        description={totalUsers > 0 ? `${totalUsers.toLocaleString()} total active users` : undefined}
-                    />
-                    <MetricCard
-                        title="Active Subscriptions"
-                        value={activeSchools}
-                        icon={CheckCircle2}
-                        variant="success"
-                        badge="Subscribed"
-                        description="Active institutional contracts"
-                    />
-                    <MetricCard
-                        title="Evaluation & Trials"
-                        value={trialSchools}
-                        icon={Clock}
-                        variant="warning"
-                        badge="In Trial"
-                        description="30-day evaluation campuses"
-                    />
-                    <MetricCard
-                        title="Suspended Tenants"
-                        value={suspendedSchools}
-                        icon={Ban}
-                        variant={suspendedSchools > 0 ? 'danger' : 'default'}
-                        badge={suspendedSchools > 0 ? 'Attention' : 'Zero'}
-                        description={
-                            suspendedSchools > 0
-                                ? 'Deactivated or overdue accounts'
-                                : 'All tenant accounts in good standing'
-                        }
-                    />
-                </div>
-
-                {/* 3. Analytics & Security Telemetry Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    {/* SaaS Growth & Onboarding Trajectory */}
-                    <div className="lg:col-span-8">
-                        <ChartCard
-                            title="Institutional Growth & User Trajectory"
-                            subtitle="Monthly tenant onboarding vs. active users across Kenya"
-                            minHeight={hasGrowthData ? 300 : 180}
-                            isEmpty={!hasGrowthData}
-                            emptyMessage="No platform telemetry recorded for the selected growth period."
-                        >
-                            {hasGrowthData && (
-                                <ResponsiveContainer width="100%" height={300}>
-                                    <AreaChart
-                                        data={growthChart}
-                                        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                                    >
-                                        <defs>
-                                            <linearGradient id="superAdminGrowthGrad" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#0D9488" stopOpacity={0.35} />
-                                                <stop offset="95%" stopColor="#0D9488" stopOpacity={0.0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid
-                                            strokeDasharray="3 3"
-                                            stroke="currentColor"
-                                            className="text-border/40"
-                                            vertical={false}
-                                        />
-                                        <XAxis
-                                            dataKey="month"
-                                            stroke="currentColor"
-                                            className="text-muted-foreground"
-                                            fontSize={11}
-                                            tickLine={false}
-                                        />
-                                        <YAxis
-                                            stroke="currentColor"
-                                            className="text-muted-foreground"
-                                            fontSize={11}
-                                            tickLine={false}
-                                        />
-                                        <Tooltip
-                                            contentStyle={{
-                                                backgroundColor: 'var(--card, #0F172A)',
-                                                borderColor: 'var(--border, rgba(255,255,255,0.1))',
-                                                borderRadius: '12px',
-                                                color: 'var(--foreground, #FFFFFF)',
-                                                fontSize: '12px',
-                                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                            }}
-                                        />
-                                        <Area
-                                            type="monotone"
-                                            dataKey="schools"
-                                            stroke="#0D9488"
-                                            strokeWidth={3}
-                                            fillOpacity={1}
-                                            fill="url(#superAdminGrowthGrad)"
-                                            name="Schools Onboarded"
-                                        />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            )}
-                        </ChartCard>
+                {/* SAAS REVENUE & CORE PLATFORM METRICS */}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {/* MRR */}
+                    <div className="rounded-3xl border border-teal-500/20 bg-gradient-to-br from-teal-500/5 via-teal-500/10 to-transparent p-6 shadow-sm">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300">
+                                Monthly Recurring (MRR)
+                            </span>
+                            <span className="grid h-8 w-8 place-items-center rounded-xl bg-teal-500 text-slate-950 font-bold">
+                                <DollarSign className="h-4 w-4" />
+                            </span>
+                        </div>
+                        <p className="mt-3 text-2xl font-extrabold text-slate-900 dark:text-white">
+                            KES {Number(revenueThisMonth).toLocaleString()}
+                        </p>
+                        <p className="mt-1 text-[11px] text-teal-600 dark:text-teal-400 font-medium">
+                            Current active monthly run-rate
+                        </p>
                     </div>
 
-                    {/* Real-Time Security Audit Stream */}
-                    <div className="lg:col-span-4 bg-card text-card-foreground rounded-2xl border border-border/80 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                                <Activity className="w-4 h-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-                                <h3 className="text-base font-bold text-foreground tracking-tight">
-                                    Security Audit Stream
+                    {/* Total SaaS Revenue */}
+                    <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                Cumulative Revenue
+                            </span>
+                            <span className="grid h-8 w-8 place-items-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                <CreditCard className="h-4 w-4" />
+                            </span>
+                        </div>
+                        <p className="mt-3 text-2xl font-extrabold text-slate-900 dark:text-white">
+                            KES {Number(totalRevenue).toLocaleString()}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400">Total verified billing settlements</p>
+                    </div>
+
+                    {/* Active vs Trial Schools */}
+                    <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                Active Institutions
+                            </span>
+                            <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                <School className="h-4 w-4" />
+                            </span>
+                        </div>
+                        <p className="mt-3 text-2xl font-extrabold text-slate-900 dark:text-white">
+                            {activeSchools} <span className="text-sm font-normal text-slate-400">/ {totalSchools}</span>
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                            {trialSchools} currently in free trial
+                        </p>
+                    </div>
+
+                    {/* Total User Reach */}
+                    <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                Platform Users
+                            </span>
+                            <span className="grid h-8 w-8 place-items-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                                <Users className="h-4 w-4" />
+                            </span>
+                        </div>
+                        <p className="mt-3 text-2xl font-extrabold text-slate-900 dark:text-white">
+                            {Number(totalUsers).toLocaleString()}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400">Admins, Teachers, Parents, Students</p>
+                    </div>
+                </div>
+
+                {/* CHARTS ROW: REVENUE TREND & SCHOOL GROWTH */}
+                <div className="grid gap-6 lg:grid-cols-2">
+                    {/* SaaS Revenue Trend Chart */}
+                    <section className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                                    SaaS Revenue Trend (6 Months)
                                 </h3>
+                                <p className="text-xs text-slate-400">Paystack settled subscription volume</p>
                             </div>
-                            <p className="text-xs text-muted-foreground">
-                                Live operational events and authorization logs.
-                            </p>
+                            <span className="text-xs font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-2.5 py-1 rounded-full border border-teal-200 dark:border-teal-800/60">
+                                KES Currency
+                            </span>
                         </div>
 
-                        <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[260px] pr-1">
-                            {!hasAuditLogs ? (
-                                <div className="py-8 text-center border border-dashed border-border rounded-xl space-y-2 bg-muted/20">
-                                    <Lock className="w-5 h-5 text-muted-foreground mx-auto" aria-hidden="true" />
-                                    <p className="text-xs text-muted-foreground">
-                                        No recent security events recorded.
-                                    </p>
+                        <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={revenueTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.4} />
+                                            <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
+                                    <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} tickFormatter={(val) => `KES ${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`} />
+                                    <Tooltip
+                                        formatter={(value: any) => [`KES ${Number(value).toLocaleString()}`, 'Revenue']}
+                                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+                                    />
+                                    <Area type="monotone" dataKey="revenue" stroke="#14b8a6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRev)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </section>
+
+                    {/* School & User Growth Chart */}
+                    <section className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                                    Tenant Onboarding Growth (12 Months)
+                                </h3>
+                                <p className="text-xs text-slate-400">New schools and active accounts</p>
+                            </div>
+                        </div>
+
+                        <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={growthChart} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="colorSchools" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
+                                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
+                                    <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+                                    />
+                                    <Area type="monotone" dataKey="schools" stroke="#6366f1" strokeWidth={2.5} fillOpacity={1} fill="url(#colorSchools)" name="Schools" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </section>
+                </div>
+
+                {/* BOTTOM ROW: EXPIRATIONS / AT-RISK QUEUE & RECENT SCHOOLS */}
+                <div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
+                    {/* Expiration Watchlist */}
+                    <section className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2.5">
+                                <span className="grid h-8 w-8 place-items-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                    <Clock className="h-4 w-4" />
+                                </span>
+                                <div>
+                                    <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                                        Upcoming Subscription Expirations (30 Days)
+                                    </h3>
+                                    <p className="text-xs text-slate-400">Institutions approaching renewal or grace period</p>
                                 </div>
-                            ) : (
-                                recentAuditLogs.map((log) => (
+                            </div>
+                            <Link href="/super-admin/subscriptions" className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline">
+                                View All
+                            </Link>
+                        </div>
+
+                        {expiringSubscriptions.length > 0 ? (
+                            <div className="space-y-3">
+                                {expiringSubscriptions.map((sub) => (
                                     <div
-                                        key={log.id}
-                                        className="p-3 rounded-xl bg-muted/30 border border-border/60 text-xs space-y-1 hover:bg-muted/60 transition-colors"
+                                        key={sub.id}
+                                        className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60"
                                     >
-                                        <div className="font-bold text-foreground truncate">
-                                            {log.action}
+                                        <div>
+                                            <p className="font-bold text-slate-900 dark:text-white text-sm">{sub.school}</p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                                                {sub.package} &middot; Renews on {sub.end_date}
+                                            </p>
                                         </div>
-                                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                                            <span className="font-semibold text-teal-700 dark:text-teal-300 truncate max-w-[140px]">
-                                                {log.school_name || 'Global Core'}
+                                        <div className="text-right">
+                                            <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                                                sub.days_left <= 3
+                                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
+                                                    : sub.days_left <= 7
+                                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                                                    : 'bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300'
+                                            }`}>
+                                                {sub.days_left} {sub.days_left === 1 ? 'day' : 'days'} left
                                             </span>
-                                            <span className="font-mono">{log.created_at}</span>
                                         </div>
                                     </div>
-                                ))
-                            )}
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 text-slate-400 text-xs">
+                                No schools currently expiring in the next 30 days.
+                            </div>
+                        )}
+                    </section>
+
+                    {/* Recently Onboarded Schools */}
+                    <section className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2.5">
+                                <span className="grid h-8 w-8 place-items-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                                    <Building2 className="h-4 w-4" />
+                                </span>
+                                <div>
+                                    <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                                        Recently Onboarded Schools
+                                    </h3>
+                                    <p className="text-xs text-slate-400">Latest registered tenants</p>
+                                </div>
+                            </div>
+                            <Link href="/super-admin/schools" className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline">
+                                View All
+                            </Link>
                         </div>
 
-                        <Link
-                            href="/super-admin/users"
-                            className="inline-flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold text-xs text-center transition-colors min-h-[44px]"
-                        >
-                            <span>View Comprehensive Audit Ledger</span>
-                            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-                        </Link>
-                    </div>
-                </div>
-
-                {/* 4. Multi-Tenant Institutional Roster */}
-                <div className="bg-card text-card-foreground rounded-2xl border border-border/80 shadow-xs overflow-hidden">
-                    <div className="p-5 border-b border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="space-y-0.5">
-                            <h3 className="text-base font-bold text-foreground tracking-tight">
-                                Recently Onboarded Institutions
-                            </h3>
-                            <p className="text-xs text-muted-foreground">
-                                Provisioned primary, JSS, and secondary schools registered on EduFlow.
-                            </p>
+                        <div className="space-y-3">
+                            {recentSchools.slice(0, 4).map((s) => (
+                                <div
+                                    key={s.id}
+                                    className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60"
+                                >
+                                    <div>
+                                        <p className="font-bold text-slate-900 dark:text-white text-sm">{s.name}</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                                            {s.plan} &middot; {s.created_at}
+                                        </p>
+                                    </div>
+                                    <span className="rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase">
+                                        {s.status}
+                                    </span>
+                                </div>
+                            ))}
                         </div>
-                        <Link
-                            href="/super-admin/schools"
-                            className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline min-h-[44px] sm:min-h-0 self-start sm:self-auto"
-                        >
-                            <span>View All Institutions</span>
-                            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-                        </Link>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs">
-                            <thead className="bg-muted/50 text-muted-foreground uppercase tracking-wider font-semibold border-b border-border/60">
-                                <tr>
-                                    <th className="py-3.5 px-5">Institution Name</th>
-                                    <th className="py-3.5 px-5">Tenant Code</th>
-                                    <th className="py-3.5 px-5">SaaS Tier Plan</th>
-                                    <th className="py-3.5 px-5">Status</th>
-                                    <th className="py-3.5 px-5 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/60 text-card-foreground">
-                                {!hasSchools ? (
-                                    <tr>
-                                        <td colSpan={5} className="py-8 text-center text-muted-foreground">
-                                            No schools currently provisioned on the platform.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    recentSchools.map((s) => (
-                                        <tr key={s.id} className="hover:bg-muted/30 transition-colors">
-                                            <td className="py-3.5 px-5">
-                                                <div className="flex items-center gap-2.5">
-                                                    <span className="w-7 h-7 rounded-lg bg-teal-500/10 text-teal-700 dark:text-teal-300 font-bold text-[10px] flex items-center justify-center shrink-0">
-                                                        <School className="w-3.5 h-3.5" aria-hidden="true" />
-                                                    </span>
-                                                    <span className="font-bold text-foreground">
-                                                        {s.name}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="py-3.5 px-5 font-mono text-muted-foreground">
-                                                {s.code}
-                                            </td>
-                                            <td className="py-3.5 px-5 font-semibold text-teal-700 dark:text-teal-300">
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-muted text-[11px] font-semibold">
-                                                    {s.plan || 'Standard Campus'}
-                                                </span>
-                                            </td>
-                                            <td className="py-3.5 px-5">
-                                                <span
-                                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-bold text-[10px] uppercase tracking-wider border ${
-                                                        s.status === 'active'
-                                                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-200/80'
-                                                            : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200/80'
-                                                    }`}
-                                                >
-                                                    {s.status}
-                                                </span>
-                                            </td>
-                                            <td className="py-3.5 px-5 text-right">
-                                                <Link
-                                                    href={`/super-admin/schools/${s.id}`}
-                                                    className="inline-flex items-center gap-1 font-bold text-teal-600 dark:text-teal-400 hover:underline min-h-[44px] sm:min-h-0"
-                                                >
-                                                    <span>Manage</span>
-                                                    <ArrowRight className="w-3 h-3" aria-hidden="true" />
-                                                </Link>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                    </section>
                 </div>
             </div>
         </AppLayout>

@@ -139,7 +139,7 @@ class InstitutionalVerificationTest extends TestCase
         $this->assertSame($this->superAdmin->id, $this->school->verified_by);
         $this->assertNotNull($this->school->verified_at);
         $this->assertSame('active', $this->school->status);
-        $this->assertStringContainsString('AUDITOR NOTE', (string) $this->school->verification_notes);
+        $this->assertStringContainsString('AUDITOR VERIFICATION', (string) $this->school->verification_notes);
     }
 
     #[Test]

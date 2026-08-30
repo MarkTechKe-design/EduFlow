@@ -18,7 +18,7 @@ class DashboardController extends Controller
 {
     public function index(Request $request): Response
     {
-        $schoolId = $this->getSchoolId() ?? ($request->user()?->school_id ?? 1);
+        $schoolId = $this->getSchoolId();
         $school = School::withoutGlobalScopes()->find($schoolId);
 
         // 1. Enrollment & Staff Metrics
@@ -27,14 +27,14 @@ class DashboardController extends Controller
             ->where(function ($q) {
                 $q->where('status', 'active')->orWhereNull('status');
             })
-            ->count() ?: 76;
+            ->count();
 
         $staffCount = Staff::withoutGlobalScopes()
             ->where('school_id', $schoolId)
             ->where(function ($q) {
                 $q->where('status', 'active')->orWhereNull('status');
             })
-            ->count() ?: 40;
+            ->count();
 
         // 2. Attendance & Today's Percentage
         $latestAttendanceDate = Attendance::withoutGlobalScopes()
@@ -51,20 +51,20 @@ class DashboardController extends Controller
 
         $attendanceTodayPercentage = ($attRecord && (int)$attRecord->total > 0)
             ? round(((int) $attRecord->attended / (int) $attRecord->total) * 100, 1)
-            : 100.0;
+            : 0.0;
 
         // 3. Term Fee Collections & Breakdown
         $termCollected = (float) FeePayment::withoutGlobalScopes()
             ->where('school_id', $schoolId)
-            ->sum('amount_paid') ?: 1578500.0;
+            ->sum('amount_paid');
 
         $structureSum = (float) DB::table('fee_structures')
             ->where('school_id', $schoolId)
             ->sum('amount');
 
-        $totalBilled = $structureSum > 0 ? ($structureSum * max($studentCount, 1)) : 2850000.0;
+        $totalBilled = $structureSum * $studentCount;
         $balance = max(0, $totalBilled - $termCollected);
-        $rate = $totalBilled > 0 ? round(($termCollected / $totalBilled) * 100, 1) : 84.7;
+        $rate = $totalBilled > 0 ? round(($termCollected / $totalBilled) * 100, 1) : 0.0;
 
         $termFeeCollection = [
             'total_billed'    => (float) $totalBilled,
@@ -76,31 +76,51 @@ class DashboardController extends Controller
         // 4. Co-Curricular Summary
         $teamsCount = Schema::hasTable('sports_teams')
             ? DB::table('sports_teams')->where('school_id', $schoolId)->count()
-            : 2;
+            : 0;
         $clubsCount = Schema::hasTable('clubs')
             ? DB::table('clubs')->where('school_id', $schoolId)->count()
-            : 3;
+            : 0;
 
-        $cocurricularSummary = [
-            'active_teams_count'        => $teamsCount ?: 4,
-            'active_clubs_count'        => $clubsCount ?: 6,
-            'upcoming_events_count'     => 2,
-            'leading_house'             => [
-                'name'         => 'Simba House',
-                'total_points' => 320,
-                'color_hex'    => '#10b981',
-            ],
-            'recent_achievements_count' => 5,
-        ];
+                        $isCocurricularEnabled = \App\Models\SchoolModule::withoutGlobalScopes()
+            ->where('school_id', $schoolId)
+            ->where('module_slug', 'cocurricular')
+            ->where('is_enabled', true)
+            ->exists();
+
+        if (! $isCocurricularEnabled) {
+            $cocurricularSummary = null;
+        } else {
+            $teamsCount = \Illuminate\Support\Facades\Schema::hasTable('teams')
+                ? (int) \Illuminate\Support\Facades\DB::table('teams')->where('school_id', $schoolId)->count()
+                : 0;
+
+            $clubsCount = \Illuminate\Support\Facades\Schema::hasTable('clubs')
+                ? (int) \Illuminate\Support\Facades\DB::table('clubs')->where('school_id', $schoolId)->count()
+                : 0;
+
+            $upcomingEventsCount = \Illuminate\Support\Facades\Schema::hasTable('school_events')
+                ? (int) \Illuminate\Support\Facades\DB::table('school_events')->where('school_id', $schoolId)->where('start_date', '>=', now())->count()
+                : 0;
+
+            $leadingHouse = \Illuminate\Support\Facades\Schema::hasTable('houses')
+                ? \Illuminate\Support\Facades\DB::table('houses')->where('school_id', $schoolId)->orderByDesc('points')->first(['name', 'points as total_points', 'color_hex'])
+                : null;
+
+            $achievementsCount = \Illuminate\Support\Facades\Schema::hasTable('student_achievements')
+                ? (int) \Illuminate\Support\Facades\DB::table('student_achievements')->where('school_id', $schoolId)->count()
+                : 0;
+
+            $cocurricularSummary = [
+                'active_teams_count'        => $teamsCount,
+                'active_clubs_count'        => $clubsCount,
+                'upcoming_events_count'     => $upcomingEventsCount,
+                'leading_house'             => $leadingHouse ? (array) $leadingHouse : null,
+                'recent_achievements_count' => $achievementsCount,
+            ];
+        }
 
         // 5. Daily Attendance Chart Series
-        $dailyAttendanceChart = [
-            ['day' => 'Mon', 'present' => 74, 'absent' => 2],
-            ['day' => 'Tue', 'present' => 76, 'absent' => 0],
-            ['day' => 'Wed', 'present' => 75, 'absent' => 1],
-            ['day' => 'Thu', 'present' => 76, 'absent' => 0],
-            ['day' => 'Fri', 'present' => 73, 'absent' => 3],
-        ];
+        $dailyAttendanceChart = [];
 
         // 6. Recent Payments
         $recentPayments = FeePayment::withoutGlobalScopes()
@@ -121,33 +141,8 @@ class DashboardController extends Controller
             })
             ->toArray();
 
-        if (empty($recentPayments)) {
-            $recentPayments = [
-                ['id' => 101, 'receipt_number' => 'REC-00841', 'student_name' => 'Brian Kipchumba', 'amount' => 35000, 'method' => 'M-PESA', 'created_at' => '10 mins ago'],
-                ['id' => 102, 'receipt_number' => 'REC-00840', 'student_name' => 'Faith Mwangi', 'amount' => 28000, 'method' => 'BANK', 'created_at' => '1 hour ago'],
-                ['id' => 103, 'receipt_number' => 'REC-00839', 'student_name' => 'Emmanuel Ochieng', 'amount' => 15000, 'method' => 'M-PESA', 'created_at' => '3 hours ago'],
-            ];
-        }
-
         // 7. Action Queue
-        $pendingApprovals = [
-            [
-                'id'           => '1',
-                'title'        => 'CBC Assessment Rubric Verification',
-                'description'  => 'Grade 7 Term 2 Integrated Science strands submitted for validation.',
-                'action_url'   => route('school.exams.index'),
-                'action_label' => 'Review Rubrics',
-                'severity'     => 'warning',
-            ],
-            [
-                'id'           => '2',
-                'title'        => 'Pending Student Admission Applications',
-                'description'  => '3 new portal registrations pending document clearance.',
-                'action_url'   => route('school.students.index'),
-                'action_label' => 'View Admissions',
-                'severity'     => 'info',
-            ],
-        ];
+        $pendingApprovals = [];
 
         return Inertia::render('Dashboard', [
             'studentCount'              => $studentCount,

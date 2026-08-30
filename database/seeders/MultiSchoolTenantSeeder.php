@@ -7,6 +7,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
 use App\Models\School;
+use App\Models\SchoolSubscription;
+use App\Models\Package;
+use Illuminate\Support\Str;
 use App\Models\User;
 use Spatie\Permission\Models\Role;
 
@@ -26,10 +29,11 @@ class MultiSchoolTenantSeeder extends Seeder
                 'address'      => 'Kilimani, Argwings Kodhek Rd',
                 'city'         => 'Nairobi',
                 'county'       => 'Nairobi',
-                'country'      => 'Kenya',
+                'country'      => 'KE',
                 'currency'     => 'KES',
-                'curriculum'   => 'CBC',
+                'curriculum'   => 'cbc',
                 'status'       => 'active',
+                'onboarding_completed_at' => $now,
             ],
             [
                 'slug'         => 'st-austin-high',
@@ -39,10 +43,11 @@ class MultiSchoolTenantSeeder extends Seeder
                 'address'      => 'James Gichuru Rd, Lavington',
                 'city'         => 'Nairobi',
                 'county'       => 'Nairobi',
-                'country'      => 'Kenya',
+                'country'      => 'KE',
                 'currency'     => 'KES',
-                'curriculum'   => '8-4-4',
+                'curriculum'   => '844',
                 'status'       => 'active',
+                'onboarding_completed_at' => $now,
             ],
             [
                 'slug'         => 'nairobi-premier',
@@ -52,10 +57,11 @@ class MultiSchoolTenantSeeder extends Seeder
                 'address'      => 'Peponi Road, Westlands',
                 'city'         => 'Nairobi',
                 'county'       => 'Nairobi',
-                'country'      => 'Kenya',
+                'country'      => 'KE',
                 'currency'     => 'KES',
-                'curriculum'   => 'Dual (CBC & IGCSE)',
+                'curriculum'   => 'dual',
                 'status'       => 'active',
+                'onboarding_completed_at' => $now,
             ],
         ];
 
@@ -145,5 +151,36 @@ class MultiSchoolTenantSeeder extends Seeder
         ]);
 
         $this->command->info('Provisioned all 21 verified multi-tenant demo user accounts.');
+        // 4. Provision Active Subscriptions for all seeded schools
+        $packages = [
+            'greenfield-academy' => Package::where('slug', 'standard-cbc-school')->first() ?? Package::first(),
+            'st-austin-high'     => Package::where('slug', 'starter-academy')->first() ?? Package::first(),
+            'nairobi-premier'    => Package::where('slug', 'enterprise-multi-campus')->first() ?? Package::first(),
+        ];
+
+        foreach ($schools as $slug => $school) {
+            $pkg = $packages[$slug] ?? Package::first();
+            if ($pkg) {
+                SchoolSubscription::withoutGlobalScopes()->updateOrCreate(
+                    [
+                        'school_id' => $school->id,
+                    ],
+                    [
+                        'public_id'         => (string) Str::uuid(),
+                        'package_id'        => $pkg->id,
+                        'billing_cycle'     => 'yearly',
+                        'start_date'        => Carbon::now()->subMonths(2)->toDateString(),
+                        'end_date'          => Carbon::now()->addYear()->toDateString(),
+                        'status'            => 'active',
+                        'lifecycle_status'  => 'active',
+                        'is_trial'          => false,
+                        'amount_paid'       => $pkg->price_yearly ?? 85000.00,
+                        'payment_method'    => 'mpesa',
+                        'notes'             => 'Institutional seeded demo subscription',
+                    ]
+                );
+            }
+        }
+        $this->command->info('Configured active subscriptions for all 3 schools.');
     }
 }

@@ -54,7 +54,9 @@ class PaystackWebhookController extends Controller
         $expectedAmount = (float) (($subscription->billing_cycle ?? 'monthly') === 'yearly'
             ? $subscription->package?->price_yearly
             : $subscription->package?->price_monthly);
-        $expectedAmount = $expectedAmount > 0 ? $expectedAmount : 1.0;
+        if ($expectedAmount <= 0) {
+            return response()->json(['message' => 'Subscription package has no valid price'], 422);
+        }
 
         if (abs($amount - $expectedAmount) > 0.01) {
             return response()->json(['message' => 'Payment amount mismatch'], 422);

@@ -102,13 +102,10 @@ class AcademicReportService
             $fullMarks = $subject->full_marks > 0 ? (float) $subject->full_marks : 100.0;
             
             $obtained = $markRecord && !$markRecord->is_absent ? (float) $markRecord->marks_obtained : null;
-            if ($obtained === null) {
-                // Fallback realistic demo score if marks row was not populated
-                $obtained = (float) rand(65, 92);
-            }
 
-            $percentage = round(($obtained / $fullMarks) * 100, 1);
-            $totalRawMarks += $obtained;
+
+            $percentage = $obtained !== null ? round(($obtained / $fullMarks) * 100, 1) : 0.0;
+            $totalRawMarks += $obtained ?? 0;
             $totalPossibleMarks += $fullMarks;
 
             // Compute CBC 8-level Rubric & Points (EE1 - BE2)
@@ -120,7 +117,7 @@ class AcademicReportService
             $teacherTitle = $tAssign ? ($tAssign->gender === 'female' ? 'MS.' : 'MR.') . ' ' . $tAssign->last_name : 'TR. ' . strtoupper(substr($subject->name, 0, 4));
 
             // Class ranking for this subject
-            $subjectRank = rand(1, min(15, $totalClassStudents));
+            $subjectRank = null;
 
             $learningAreas[] = [
                 'index'             => $idx + 1,
@@ -129,13 +126,13 @@ class AcademicReportService
                 'name'              => $subject->name,
                 'marks_obtained'    => $obtained,
                 'full_marks'        => $fullMarks,
-                'raw_display'       => "{$obtained}/" . (int)$fullMarks,
+                'raw_display'       => $obtained === null ? '—' : "{$obtained}/" . (int)$fullMarks,
                 'percentage'        => $percentage,
                 'level_short'       => $cbcData['short'], // EE, ME, AE, BE
                 'level_code'        => $cbcData['code'],  // EE1, EE2, ME1, ME2, etc.
                 'level_name'        => $cbcData['name'],  // Exceeding Expectation
                 'points'            => $cbcData['points'],
-                'rank'              => "{$subjectRank} / {$totalClassStudents}",
+                'rank'              => $subjectRank,
                 'teacher_name'      => $teacherTitle,
                 'comment'           => $this->generateSubjectComment($percentage, $subject->name),
             ];
@@ -147,7 +144,7 @@ class AcademicReportService
         $overallCbc = $this->evaluateCbcLevel($meanPercentage);
 
         // Overall Student Class Rank
-        $overallRank = rand(1, min(10, $totalClassStudents));
+        $overallRank = null;
 
         // Attendance Stats
         $attendanceDaysPresent = Attendance::withoutGlobalScopes()
@@ -315,5 +312,156 @@ class AcademicReportService
         } else {
             return "{$name} has made good effort. With dedicated revision and focus, higher competency levels are attainable.";
         }
+    }
+
+    /**
+     * Compile individual student exam report payload.
+     */
+    public function forStudentExam(Student $student, Exam $exam): array
+    {
+        $schoolId = auth()->user()?->school_id ?? $student->school_id;
+
+        // Tenant Isolation Check
+        if ((int) $student->school_id !== (int) $exam->school_id || ((int) $student->school_id !== (int) $schoolId && auth()->check() && !auth()->user()->hasRole('super-admin'))) {
+            throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Student does not belong to the exam's institution context.");
+        }
+
+        $school = $student->school ?? School::withoutGlobalScopes()->findOrFail($student->school_id);
+        $grading = new GradingService($school->id);
+
+        $subjects = Subject::withoutGlobalScopes()
+            ->where('school_id', $school->id)
+            ->where('class_id', $student->class_id)
+            ->get();
+
+        $marks = Mark::withoutGlobalScopes()
+            ->where('school_id', $school->id)
+            ->where('exam_id', $exam->id)
+            ->where('student_id', $student->id)
+            ->get()
+            ->keyBy('subject_id');
+
+        $subjectRows = [];
+        $totalMarksObtained = 0.0;
+        $totalFullMarks = 0.0;
+
+        foreach ($subjects as $subject) {
+            $markRecord = $marks->get($subject->id);
+            $fullMarks = (float) ($subject->full_marks ?: 100.0);
+            $totalFullMarks += $fullMarks;
+
+            if ($markRecord) {
+                $isAbsent = (bool) $markRecord->is_absent;
+                $marksObtained = $isAbsent ? null : (float) $markRecord->marks_obtained;
+                $percentage = $marksObtained !== null && $fullMarks > 0 ? round(($marksObtained / $fullMarks) * 100, 2) : 0.0;
+                
+                $gradeDetails = $marksObtained !== null ? $grading->calculate($marksObtained, $fullMarks) : ['grade' => '—', 'gpa' => 0.0, 'points' => 0.0, 'remarks' => 'Absent'];
+
+                if (!$isAbsent && $marksObtained !== null) {
+                    $totalMarksObtained += $marksObtained;
+                }
+
+                $subjectRows[] = [
+                    'subject_id'   => $subject->id,
+                    'subject_name' => $subject->name,
+                    'subject_code' => $subject->code,
+                    'full_marks'   => $fullMarks,
+                    'marks'        => $marksObtained,
+                    'percentage'   => $percentage,
+                    'grade'        => $isAbsent ? 'ABS' : ($markRecord->grade ?: $gradeDetails['grade']),
+                    'points'       => $isAbsent ? 0.0 : (float) ($markRecord->gpa ?: $gradeDetails['gpa']),
+                    'is_absent'    => $isAbsent,
+                    'display_mark' => $isAbsent ? 'ABS' : (string) $marksObtained,
+                    'remarks'      => $isAbsent ? 'Absent' : $gradeDetails['remarks'],
+                ];
+            } else {
+                $subjectRows[] = [
+                    'subject_id'   => $subject->id,
+                    'subject_name' => $subject->name,
+                    'subject_code' => $subject->code,
+                    'full_marks'   => $fullMarks,
+                    'marks'        => null,
+                    'percentage'   => 0.0,
+                    'grade'        => '—',
+                    'points'       => 0.0,
+                    'is_absent'    => false,
+                    'display_mark' => '—',
+                    'remarks'      => 'Unrecorded',
+                ];
+            }
+        }
+
+        // Attendance Aggregation
+        $attendances = Attendance::withoutGlobalScopes()
+            ->where('school_id', $school->id)
+            ->where('attendable_type', Student::class)
+            ->where('attendable_id', $student->id)
+            ->get();
+
+        $daysPresent = $attendances->whereIn('status', ['present', 'late'])->count();
+        $daysAbsent = $attendances->where('status', 'absent')->count();
+        $totalDays = $attendances->count();
+
+        return [
+            'student' => $student->toArray(),
+            'exam' => $exam->toArray(),
+            'subjects' => $subjectRows,
+            'total_marks_obtained' => $totalMarksObtained,
+            'total_full_marks' => $totalFullMarks,
+            'attendance' => [
+                'days_present' => $daysPresent,
+                'days_absent' => $daysAbsent,
+                'total_days' => $totalDays,
+            ],
+        ];
+    }
+
+    /**
+     * Compile class exam summary with 1224 Standard Competition Ranking.
+     */
+    public function forClassExam(SchoolClass $class, Exam $exam): array
+    {
+        $schoolId = $class->school_id;
+        $students = Student::withoutGlobalScopes()
+            ->where('school_id', $schoolId)
+            ->where('class_id', $class->id)
+            ->get();
+
+        $studentSummaries = [];
+
+        foreach ($students as $st) {
+            $marks = Mark::withoutGlobalScopes()
+                ->where('school_id', $schoolId)
+                ->where('exam_id', $exam->id)
+                ->where('student_id', $st->id)
+                ->where('is_absent', false)
+                ->sum('marks_obtained');
+
+            $studentSummaries[] = [
+                'student_id' => $st->id,
+                'student' => $st,
+                'total_score' => (float) $marks,
+            ];
+        }
+
+        // Sort descending by score
+        usort($studentSummaries, fn($a, $b) => $b['total_score'] <=> $a['total_score']);
+
+        // Standard 1224 Competition Ranking
+        $ranked = [];
+        $currentRank = 1;
+        foreach ($studentSummaries as $index => $row) {
+            if ($index > 0 && $row['total_score'] < $studentSummaries[$index - 1]['total_score']) {
+                $currentRank = $index + 1;
+            }
+            $row['rank'] = $currentRank;
+            $ranked[] = $row;
+        }
+
+        return [
+            'class' => $class->toArray(),
+            'exam' => $exam->toArray(),
+            'students' => $ranked,
+        ];
     }
 }

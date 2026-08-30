@@ -203,6 +203,7 @@ class NavigationRegistry
 
             // 12. SCHOOL SETTINGS & SYSTEM CONFIG
             ['group' => 'Administration', 'label' => 'School Settings', 'route' => 'school.settings.index', 'icon' => 'settings', 'scope' => 'school', 'roles' => ['school-admin', 'principal']],
+            ['group' => 'Administration', 'label' => 'Subscription & Billing', 'route' => 'billing.index', 'icon' => 'credit-card', 'scope' => 'school', 'roles' => ['school-admin', 'principal']],
             ['group' => 'Administration', 'label' => 'Admin Users', 'route' => 'school.settings.admins', 'icon' => 'user-cog', 'scope' => 'school', 'roles' => ['school-admin']],
             ['group' => 'Administration', 'label' => 'SMS & SMTP Gateways', 'route' => 'school.settings.integrations', 'icon' => 'wrench', 'scope' => 'school', 'roles' => ['school-admin']],
 
@@ -242,6 +243,7 @@ class NavigationRegistry
             ['group' => 'Platform Administration', 'label' => 'Subscription Packages', 'route' => 'super-admin.packages.index', 'icon' => 'package', 'scope' => 'platform', 'roles' => ['super-admin']],
             ['group' => 'Platform Administration', 'label' => 'School Subscriptions', 'route' => 'super-admin.subscriptions.index', 'icon' => 'credit-card', 'scope' => 'platform', 'roles' => ['super-admin']],
             ['group' => 'Platform Administration', 'label' => 'Global Users', 'route' => 'super-admin.users.index', 'icon' => 'users', 'scope' => 'platform', 'roles' => ['super-admin']],
+            ['group' => 'Platform Administration', 'label' => 'Discount Coupons', 'route' => 'super-admin.coupons.index', 'icon' => 'ticket', 'scope' => 'platform', 'roles' => ['super-admin']],
             ['group' => 'System & Operations', 'label' => 'Module Manager', 'route' => 'super-admin.module-manager.index', 'icon' => 'sliders', 'scope' => 'platform', 'roles' => ['super-admin']],
             ['group' => 'System & Operations', 'label' => 'System Health', 'route' => 'super-admin.system-health.index', 'icon' => 'activity', 'scope' => 'platform', 'roles' => ['super-admin']],
             ['group' => 'System & Operations', 'label' => 'Platform Settings', 'route' => 'super-admin.settings.index', 'icon' => 'settings', 'scope' => 'platform', 'roles' => ['super-admin']],

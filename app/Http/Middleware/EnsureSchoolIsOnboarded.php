@@ -20,7 +20,7 @@ class EnsureSchoolIsOnboarded
 
         if ($school && is_null($school->onboarding_completed_at)) {
             if (!$request->is('onboarding*') && !$request->is('logout')) {
-                return redirect()->route('onboarding.index');
+                return redirect()->route('onboarding');
             }
         }
 

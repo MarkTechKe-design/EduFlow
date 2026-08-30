@@ -8,6 +8,8 @@ use App\Models\School;
 use App\Models\SchoolSetting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use App\Mail\SchoolOnboardingCompletedMail;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -56,6 +58,25 @@ class OnboardingController extends Controller
         abort_unless($user && $user->school_id, 403, 'Unauthorized tenant context.');
 
         $school = School::where('id', $user->school_id)->firstOrFail();
+
+        // Normalize payload
+        $input = $request->all();
+        if (isset($input['curriculum'])) {
+            $input['curriculum'] = strtolower(trim($input['curriculum']));
+            if ($input['curriculum'] === '8-4-4') $input['curriculum'] = '844';
+        }
+        if (isset($input['country'])) {
+            $country = strtoupper(trim($input['country']));
+            if ($country === 'KENYA') $country = 'KE';
+            $input['country'] = substr($country, 0, 2);
+        } else {
+            $input['country'] = 'KE';
+        }
+        if (empty($input['currency'])) {
+            $input['currency'] = 'KES';
+        }
+
+        $request->merge($input);
 
         $data = $request->validate([
             'name'          => ['required', 'string', 'max:150'],

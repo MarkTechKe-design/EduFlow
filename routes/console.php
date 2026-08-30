@@ -15,3 +15,7 @@ Artisan::command('subscriptions:expire-trials', function (SubscriptionLifecycleS
 Schedule::command('subscriptions:expire-trials')->dailyAt('01:15');
 Schedule::command('subscriptions:charge-trials')->dailyAt('00:05')->withoutOverlapping()->runInBackground();
 
+
+
+
+Schedule::command('eduflow:audit-subscriptions')->dailyAt('06:00');

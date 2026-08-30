@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\School;
+use App\Models\SchoolSubscription;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -50,7 +51,20 @@ class EnsureSchoolRoleAccess
             abort(403, 'School institution registration has been rejected by platform administration.');
         }
 
+        $hasEntitlement = SchoolSubscription::withoutGlobalScopes()
+            ->where('school_id', $school->id)
+            ->whereIn('lifecycle_status', ['trial', 'active', 'grace_period'])
+            ->where(function ($query): void {
+                $query->whereNull('end_date')->orWhereDate('end_date', '>=', today());
+            })
+            ->exists();
+        abort_unless($hasEntitlement, 403, 'School subscription is not active.');
+
         $routeName = $request->route()?->getName() ?? '';
+        if ($school->verification_status !== 'verified'
+            && ! in_array($routeName, ['onboarding', 'onboarding.update'], true)) {
+            abort(403, 'School institution registration is awaiting verification.');
+        }
 
         if ($user->hasRole('driver') && ! str_starts_with($routeName, 'school.transport.')) {
             abort(403, 'Driver access is restricted to transport operations.');

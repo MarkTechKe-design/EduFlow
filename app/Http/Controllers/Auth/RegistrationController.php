@@ -82,6 +82,20 @@ class RegistrationController extends Controller
 
     public function store(Request $request, PaystackPaymentGateway $gateway): RedirectResponse
     {
+                if ($request->filled('paystack_reference')) {
+            $ref = trim((string) $request->input('paystack_reference'));
+            $alreadyUsed = \App\Models\SchoolSubscription::withoutGlobalScopes()
+                ->where('paystack_reference', $ref)
+                ->orWhere('paystack_authorization_code', $ref)
+                ->exists();
+
+            if ($alreadyUsed) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'paystack_reference' => ['This payment reference has already been used.'],
+                ]);
+            }
+        }
+
         $data = $request->validate([
             'package_id'            => ['required', 'integer', 'exists:packages,id'],
             'billing_cycle'         => ['required', 'in:monthly,yearly'],
@@ -134,22 +148,24 @@ class RegistrationController extends Controller
 
         // 3. Mandatory Payment Verification for non-trial paid subscriptions
         $verifiedPayment = [];
-        if (!$hasTrial && $expectedAmount > 0.0) {
-            $ref = trim((string) ($data['paystack_reference'] ?? ''));
-            if (empty($ref)) {
-                throw ValidationException::withMessages([
-                    'paystack_reference' => ['Payment reference is required for this subscription package.'],
-                ]);
-            }
-
-            // Replay protection: verify reference hasn't already been used in an existing subscription
-            $alreadyUsed = SchoolSubscription::withoutGlobalScopes()->where('paystack_reference', $ref)
-                ->orWhere('paystack_authorization_code', $ref)
+        if (filled($data['paystack_reference'] ?? null)) {
+            $submittedRef = trim((string) $data['paystack_reference']);
+            $alreadyUsed = SchoolSubscription::withoutGlobalScopes()->where('paystack_reference', $submittedRef)
+                ->orWhere('paystack_authorization_code', $submittedRef)
                 ->exists();
 
             if ($alreadyUsed) {
                 throw ValidationException::withMessages([
                     'paystack_reference' => ['This payment reference has already been used.'],
+                ]);
+            }
+        }
+
+        if (!$hasTrial && $expectedAmount > 0.0) {
+            $ref = trim((string) ($data['paystack_reference'] ?? ''));
+            if (empty($ref)) {
+                throw ValidationException::withMessages([
+                    'paystack_reference' => ['Payment reference is required for this subscription package.'],
                 ]);
             }
 

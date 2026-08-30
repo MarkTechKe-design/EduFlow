@@ -118,6 +118,13 @@ Route::middleware(['auth', 'active'])->group(function () {
             return redirect()->route('parent.dashboard');
         }
 
+        if ($user->school_id && \App\Models\School::query()
+            ->whereKey($user->school_id)
+            ->whereNull('onboarding_completed_at')
+            ->exists()) {
+            return redirect()->route('onboarding');
+        }
+
         return app(\App\Http\Controllers\SchoolAdmin\DashboardController::class)->index($request);
     })->name('dashboard');
 });
@@ -130,30 +137,26 @@ Route::middleware(['auth', 'active'])->group(function () {
 Route::middleware(['auth', 'active', 'school-role'])->prefix('school')->name('school.')->group(function () {
 
         // --- AUTOMATED AUDIT REPAIRS: SCHOOL ADMIN ENDPOINTS ---
-        Route::get('/fees', [\App\Http\Controllers\SchoolAdmin\FeePaymentController::class, 'index'])->name('fees.index');
-        Route::get('/fees/reports', [\App\Http\Controllers\SchoolAdmin\FinancialReportController::class, 'index'])->name('fees.reports');
+        Route::get('/fees', [\App\Http\Controllers\SchoolAdmin\FeePaymentController::class, 'index'])->middleware('permission:fees.view')->name('fees.index');
+        Route::get('/fees/reports', [\App\Http\Controllers\SchoolAdmin\FinancialReportController::class, 'index'])->middleware('permission:fees.reports')->name('fees.reports');
         Route::post('/fees/reports/sms-defaulters', [\App\Http\Controllers\SchoolAdmin\FinancialReportController::class, 'sendBatchSms'])->middleware('permission:reports.view')->name('fees.reports.sms-defaulters');
-        Route::post('/fees/unallocated/{payment}/resolve', [\App\Http\Controllers\SchoolAdmin\UnallocatedPaymentController::class, 'resolve'])->name('fees.unallocated.resolve');
+        Route::post('/fees/unallocated/{payment}/resolve', [\App\Http\Controllers\SchoolAdmin\UnallocatedPaymentController::class, 'resolve'])->middleware('permission:fees.collect')->name('fees.unallocated.resolve');
 
         Route::match(['put', 'patch', 'post'], '/admissions/visitors/{id}/checkout', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'checkout'])->name('admissions.visitors.checkout');
         Route::match(['put', 'delete'], '/admissions/visitors/{id}', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'destroy'])->name('admissions.visitors.destroy');
 
-        Route::get('/compliance/odpc-audit/export', [\App\Http\Controllers\SchoolAdmin\OdpcAuditController::class, 'exportCsv'])->name('compliance.odpc-audit.export');
-        Route::post('/exams/{exam}/marks/import', [\App\Http\Controllers\SchoolAdmin\ExamController::class, 'importMarksCsv'])->name('exams.marks.import');
-        Route::get('/homework/{homework}/submissions', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'download'])->name('homework.submissions');
+        Route::get('/compliance/odpc-audit/export', [\App\Http\Controllers\SchoolAdmin\OdpcAuditController::class, 'exportCsv'])->middleware('permission:reports.export')->name('compliance.odpc-audit.export');
+        Route::post('/exams/{exam}/marks/import', [\App\Http\Controllers\SchoolAdmin\ExamController::class, 'importMarksCsv'])->middleware('permission:marks.entry')->name('exams.marks.import');
+        Route::get('/homework/{homework}/submissions', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'download'])->middleware('permission:homework.view')->name('homework.submissions');
 
         Route::get('/library', [\App\Http\Controllers\SchoolAdmin\LibraryController::class, 'index'])->middleware('permission:library.view')->name('library.alias');
         Route::post('/library/clear-fine/{issueId}', [\App\Http\Controllers\SchoolAdmin\LibraryController::class, 'clearFine'])->name('library.clear-fine');
         Route::get('/library/clearance-check/{studentId}', [\App\Http\Controllers\SchoolAdmin\LibraryController::class, 'checkStudentClearance'])->name('library.clearance-check');
 
         Route::delete('/settings/admins/{user}', [\App\Http\Controllers\SchoolAdmin\SchoolUserController::class, 'destroy'])->name('settings.admins.destroy');
-        Route::post('/settings/admins/{user}/{action}', function ($user, $action) {
-            $controller = app(\App\Http\Controllers\SchoolAdmin\SchoolUserController::class);
-            if (method_exists($controller, $action)) {
-                return $controller->$action($user);
-            }
-            abort(404);
-        })->name('settings.admins.action');
+        Route::put('/settings/admins/{user}', [\App\Http\Controllers\SchoolAdmin\SchoolUserController::class, 'update'])->name('settings.admins.update');
+        Route::post('/settings/admins/{user}/suspend', [\App\Http\Controllers\SchoolAdmin\SchoolUserController::class, 'suspend'])->name('settings.admins.suspend');
+        Route::post('/settings/admins/{user}/activate', [\App\Http\Controllers\SchoolAdmin\SchoolUserController::class, 'activate'])->name('settings.admins.activate');
 
         Route::match(['post', 'patch'], '/teacher-assignments/{assignment}/conclude', [\App\Http\Controllers\SchoolAdmin\TeacherAssignmentController::class, 'concludeOrTransfer'])->name('teacher-assignments.conclude');
         Route::post('/timetable/slots/save', [\App\Http\Controllers\SchoolAdmin\TimetableController::class, 'saveSlots'])->name('timetable.slots.save');
@@ -265,7 +268,7 @@ Route::middleware(['auth', 'verified', 'active', 'module', 'school-role', 'role:
         Route::get('/students/visitor-desk', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'index'])->name('students.visitor-desk');
         Route::get('/admissions/inquiries', [\App\Http\Controllers\SchoolAdmin\AdmissionInquiryController::class, 'index'])->name('admissions.inquiries');
         Route::post('/admissions/inquiries', [\App\Http\Controllers\SchoolAdmin\AdmissionInquiryController::class, 'store'])->name('admissions.inquiries.store');
-        Route::get('/admissions/visitors/export-csv', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'exportCsv'])->name('admissions.visitors.export');
+        Route::get('/admissions/visitors/export-csv', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'exportCsv'])->middleware('permission:reports.export')->name('admissions.visitors.export');
             Route::get('/admissions/visitors', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'index'])->name('admissions.visitors');
         Route::post('/admissions/visitors', [\App\Http\Controllers\SchoolAdmin\VisitorLogController::class, 'store'])->name('admissions.visitors.store');
         Route::post('/students/{student}/documents', [\App\Http\Controllers\SchoolAdmin\StudentController::class, 'uploadDocument'])->middleware(['permission:students.create', 'throttle:uploads'])->name('students.documents.upload');
@@ -526,13 +529,7 @@ Route::middleware(['auth', 'active', 'role:super-admin'])->prefix('super-admin')
         Route::match(['post', 'patch'], '/faqs/{faq}/toggle-publish', [\App\Http\Controllers\SuperAdmin\FaqController::class, 'togglePublish'])->name('faqs.toggle-publish');
         Route::match(['post', 'patch'], '/faqs/{faq}/toggle-homepage', [\App\Http\Controllers\SuperAdmin\FaqController::class, 'toggleHomepage'])->name('faqs.toggle-homepage');
         Route::match(['post', 'delete'], '/settings/register-backgrounds/delete', [\App\Http\Controllers\SuperAdmin\SettingsController::class, 'deleteRegisterBackground'])->name('settings.register-backgrounds.delete');
-        Route::post('/users/{user}/{action}', function ($user, $action) {
-            $controller = app(\App\Http\Controllers\SuperAdmin\UserManagementController::class);
-            if (method_exists($controller, $action)) {
-                return $controller->$action($user);
-            }
-            abort(404);
-        })->name('users.action');
+
     Route::get('/dashboard', [\App\Http\Controllers\SuperAdmin\DashboardController::class, 'index'])->name('dashboard');
     Route::resource('schools', \App\Http\Controllers\SuperAdmin\SchoolController::class);
     Route::match(['post', 'patch'], '/schools/{school}/suspend', [\App\Http\Controllers\SuperAdmin\SchoolController::class, 'suspend'])->name('schools.suspend');
@@ -607,7 +604,7 @@ Route::middleware(['auth', 'active'])->group(function () {
 });
 
 Route::middleware(['auth', 'active'])->group(function () {
-    Route::get('/school/homework/{homework}/download', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'download'])->name('school.homework.download');
+    Route::get('/school/homework/{homework}/download', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'download'])->middleware(['school-role', 'permission:homework.view'])->name('school.homework.download');
 });
 
 
@@ -617,3 +614,15 @@ Route::middleware(['auth', 'active'])->group(function () {
 // Bulk CBC Reports (Single, Selected IDs, or Entire Class/Stream)
 
 
+
+Route::middleware(['auth', 'active', 'role:school-admin,principal'])->group(function () {
+    Route::put('/billing/details', [\App\Http\Controllers\BillingController::class, 'updateBillingDetails'])->name('billing.details.update');
+    Route::get('/billing/invoices/{id}/download', [\App\Http\Controllers\BillingController::class, 'downloadInvoice'])->name('billing.invoices.download');
+    Route::post('/billing/invoices/{id}/resend', [\App\Http\Controllers\BillingController::class, 'resendInvoice'])->name('billing.invoices.resend');
+});
+Route::middleware(['auth', 'active'])->group(function () {
+    Route::post('/super-admin/schools/{school}/impersonate', [\App\Http\Controllers\SuperAdmin\ImpersonationController::class, 'impersonate'])
+        ->name('super-admin.schools.impersonate');
+    Route::post('/super-admin/leave-impersonation', [\App\Http\Controllers\SuperAdmin\ImpersonationController::class, 'leave'])
+        ->name('super-admin.leave-impersonation');
+});

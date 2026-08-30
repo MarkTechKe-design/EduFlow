@@ -16,6 +16,10 @@ class EnsureUserIsActive
         $user = $request->user();
 
         if ($user && isset($user->status) && in_array(strtolower($user->status), ['inactive', 'suspended', 'disabled', 'banned'])) {
+            if ($request->expectsJson() || $request->is('school/*') || $request->is('api/*')) {
+                abort(403, 'Your account is inactive. Please contact support.');
+            }
+
             auth()->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

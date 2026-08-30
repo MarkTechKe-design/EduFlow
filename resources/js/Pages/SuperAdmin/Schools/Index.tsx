@@ -1,6 +1,6 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { Plus, Search, School, MoreHorizontal, Pencil, Ban, CheckCircle, Trash2, Eye } from 'lucide-react';
+import { Plus, LogIn, Search, School, MoreHorizontal, Pencil, Ban, CheckCircle, Trash2, Eye } from 'lucide-react';
 import AppLayout from '@/Layouts/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,7 +50,7 @@ const statusBadge = (status: string) => {
 };
 
 export default function SchoolsIndex() {
-    const { schools, filters, stats } = usePage<SchoolsPageProps>().props;
+    const { schools, filters, stats = { total: 0, active: 0, suspended: 0 } } = usePage<SchoolsPageProps>().props;
     const [search, setSearch] = useState(filters.search ?? '');
 
     const applyFilters = (params: Record<string, string>) => {
@@ -207,6 +207,10 @@ export default function SchoolsIndex() {
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
+                                                                                        <DropdownMenuItem onClick={() => router.post(`/super-admin/schools/${school.id}/impersonate`)} className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 font-semibold cursor-pointer">
+                                                <LogIn className="w-4 h-4 shrink-0" /> Access School Portal
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
                                             <DropdownMenuItem asChild>
                                                 <Link href={`/super-admin/schools/${school.id}`} className="flex items-center gap-2 text-sm">
                                                     <Eye className="w-4 h-4 shrink-0" /> View
@@ -243,10 +247,10 @@ export default function SchoolsIndex() {
                 </Table>
 
                 {/* Pagination */}
-                {schools.meta.last_page > 1 && (
+                {(schools?.meta?.last_page ?? (schools as any)?.last_page ?? 1) > 1 && (
                     <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
                         <p className="text-xs text-slate-500">
-                            Showing {schools.meta.from}–{schools.meta.to} of {schools.meta.total}
+                            Showing {schools.meta.from}–{schools.meta.to} of {(schools?.meta?.total ?? (schools as any)?.total ?? 0)}
                         </p>
                         <div className="flex gap-1">
                             {schools.links.prev && (

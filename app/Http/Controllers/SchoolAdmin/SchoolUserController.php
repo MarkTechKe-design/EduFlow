@@ -162,7 +162,7 @@ class SchoolUserController extends Controller
         if (\Inertia\Inertia::getFacadeRoot()) {
             return \Inertia\Inertia::render($viewName, [
                 'school' => request()->user()?->school,
-                'students' => \App\Models\Student::query()->where('school_id', request()->user()?->school_id ?? 1)->limit(20)->get(),
+                'students' => \App\Models\Student::query()->where('school_id', request()->user()?->school_id ?? abort(403, 'Tenant access denied: No valid school context.'))->limit(20)->get(),
             ]);
         }
         return response()->json(['status' => 'ok']);

@@ -34,7 +34,7 @@ export default function CreateSchool() {
 
     const { register, handleSubmit, setValue, watch, setError, formState: { errors, isSubmitting } } =
         useForm<FormData>({
-            resolver: zodResolver(schema),
+            resolver: zodResolver(schema) as any,
             defaultValues: { country: 'KE', timezone: 'Africa/Nairobi', currency: 'KES', language: 'en', status: 'active' },
         });
 
@@ -78,7 +78,7 @@ export default function CreateSchool() {
                     </div>
                 </div>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-4">
                     <Card className="dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                         <CardHeader className="pb-3">
                             <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-300">Basic Information</CardTitle>

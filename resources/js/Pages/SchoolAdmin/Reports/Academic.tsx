@@ -67,7 +67,7 @@ export default function AcademicReport({ exams, classPerformance, subjectPerform
                                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                                         <XAxis dataKey="class_name" tick={{ fontSize: 11 }} />
                                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-                                        <Tooltip formatter={(v: number) => [`${v}%`, 'Pass Rate']} />
+                                        <Tooltip formatter={(v: any) => [`${v}%`, 'Pass Rate']} />
                                         <Bar dataKey="pass_rate" fill="#22c55e" radius={[4, 4, 0, 0]} isAnimationActive={false} />
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -83,7 +83,7 @@ export default function AcademicReport({ exams, classPerformance, subjectPerform
                                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                                         <XAxis dataKey="subject" tick={{ fontSize: 11 }} />
                                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-                                        <Tooltip formatter={(v: number) => [`${v}%`, 'Avg %']} />
+                                        <Tooltip formatter={(v: any) => [`${v}%`, 'Avg %']} />
                                         <Bar dataKey="avg_percent" fill="#6366f1" radius={[4, 4, 0, 0]} isAnimationActive={false} />
                                     </BarChart>
                                 </ResponsiveContainer>

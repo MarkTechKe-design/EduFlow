@@ -28,7 +28,7 @@ export default function SectionsIndex() {
     const [editing, setEditing] = useState<Section | null>(null);
 
     const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } =
-        useForm<FormData>({ resolver: zodResolver(schema) });
+        useForm<FormData>({ resolver: zodResolver(schema) as any });
 
     const openCreate = () => { reset({ name: '', capacity: 0 }); setEditing(null); setOpen(true); };
     const openEdit   = (s: Section) => { reset({ class_id: s.class_id, name: s.name, capacity: s.capacity }); setEditing(s); setOpen(true); };
@@ -98,7 +98,7 @@ export default function SectionsIndex() {
                     <DialogHeader>
                         <DialogTitle>{editing ? 'Edit Section' : 'Add Section'}</DialogTitle>
                     </DialogHeader>
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+                    <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-4 pt-2">
                         <div className="space-y-1.5">
                             <Label>Class <span className="text-red-500">*</span></Label>
                             <Select

@@ -128,7 +128,7 @@ export default function WebsitePage({
             description={page?.seo_description || undefined}
             navigation={navigation}
             footerNavigation={footerNavigation}
-            branding={branding}
+            branding={branding as any}
             currentPath={requestedPath}
         >
             <Head title={title}>
@@ -138,11 +138,11 @@ export default function WebsitePage({
                 {page?.structured_data && <script type="application/ld+json">{JSON.stringify(page.structured_data)}</script>}
             </Head>
 
-            {path === 'features' && <FeaturesView branding={branding} />}
+            {path === 'features' && <FeaturesView />}
             {path === 'pricing' && <PricingView packages={packages} />}
-            {path === 'about' && <AboutView branding={branding} page={page} sections={page?.sections} />}
-            {path === 'contact' && <ContactView branding={branding} />}
-            {isLegal && <LegalView type={path as any} branding={branding} page={page} sections={page?.sections} />}
+            {path === 'about' && <AboutView branding={branding as any} page={page} sections={page?.sections as any} />}
+            {path === 'contact' && <ContactView branding={branding as any} />}
+            {isLegal && <LegalView type={path as any} branding={branding as any} page={page} sections={page?.sections as any} />}
             {path === 'faq' && <FAQSection faqs={homepageFaqItems} title={faq.heading} subtitle={faq.body} showViewAll={false} />}
 
             {path === 'home' && (

@@ -43,7 +43,7 @@ export default function EditSchool() {
 
     const { register, handleSubmit, setValue, setError, formState: { errors, isSubmitting } } =
         useForm<FormData>({
-            resolver: zodResolver(schema),
+            resolver: zodResolver(schema) as any,
             defaultValues: {
                 name: school.name,
                 slug: school.slug,
@@ -106,7 +106,7 @@ export default function EditSchool() {
                     </div>
                 </div>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
                     {/* 1. Basic Information */}
                     <Card className="dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                         <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">

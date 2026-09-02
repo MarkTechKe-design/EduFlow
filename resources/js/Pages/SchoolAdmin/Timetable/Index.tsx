@@ -135,7 +135,7 @@ export default function TimetableIndex({ classes, sections, subjects, teachers, 
     }
 
     function handleSaveCustomSlots() {
-        router.post('/school/timetable/slots/save', { slots: customSlots }, {
+        router.post('/school/timetable/slots/save', { slots: customSlots as any }, {
             onSuccess: () => setSlotsModalOpen(false),
         });
     }

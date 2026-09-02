@@ -30,7 +30,7 @@ interface AllowanceItem {
     amount: number;
 }
 
-interface Props extends PageProps {
+interface Props extends Omit<PageProps, "school"> {
     payroll: {
         id: number;
         month_year: string;

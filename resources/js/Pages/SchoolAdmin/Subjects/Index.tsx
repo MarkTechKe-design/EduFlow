@@ -35,7 +35,7 @@ export default function SubjectsIndex() {
     const [editing, setEditing] = useState<Subject | null>(null);
 
     const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } =
-        useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { type: 'theory', full_marks: 100, pass_marks: 33 } });
+        useForm<FormData>({ resolver: zodResolver(schema) as any, defaultValues: { type: 'theory', full_marks: 100, pass_marks: 33 } });
 
     const openCreate = () => { reset({ type: 'theory', full_marks: 100, pass_marks: 33 }); setEditing(null); setOpen(true); };
     const openEdit   = (s: Subject) => { reset({ class_id: s.class_id, name: s.name, code: s.code ?? '', type: s.type, full_marks: s.full_marks, pass_marks: s.pass_marks }); setEditing(s); setOpen(true); };
@@ -116,7 +116,7 @@ export default function SubjectsIndex() {
                     <DialogHeader>
                         <DialogTitle>{editing ? 'Edit Subject' : 'Add Subject'}</DialogTitle>
                     </DialogHeader>
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+                    <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-4 pt-2">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5 col-span-2">
                                 <Label>Subject Name <span className="text-red-500">*</span></Label>

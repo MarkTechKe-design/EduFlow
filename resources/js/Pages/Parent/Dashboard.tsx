@@ -179,10 +179,10 @@ export default function ParentDashboard({
                                                     : 'bg-muted text-muted-foreground'
                                             }`}
                                         >
-                                            {child.name.charAt(0)}
+                                            {((child?.name || (child as any)?.first_name || 'L') as string).charAt(0).toUpperCase()}
                                         </div>
                                         <div className="text-left">
-                                            <div className="truncate max-w-[140px]">{child.name}</div>
+                                            <div className="truncate max-w-[140px]">{child?.name || (child as any)?.first_name || "Learner"}</div>
                                             <div
                                                 className={`text-[10px] font-normal ${
                                                     isSelected ? 'text-teal-100' : 'text-muted-foreground'

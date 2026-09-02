@@ -4,7 +4,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { User, Mail, Shield, School, BookOpen } from 'lucide-react';
 import type { PageProps } from '@/types';
 
-export default function StudentProfile({ auth, student }: PageProps<{ student: any }>) {
+export default function StudentProfile({ auth, school, student }: PageProps<{ student: any }>) {
     const user = student || auth?.user;
 
     return (
@@ -32,7 +32,7 @@ export default function StudentProfile({ auth, student }: PageProps<{ student: a
                                 <School className="w-3.5 h-3.5" /> Institution
                             </span>
                             <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mt-1">
-                                {auth?.school?.name || 'EduFlow School'}
+                                {school?.name || 'EduFlow School'}
                             </p>
                         </div>
                         <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">

@@ -124,7 +124,7 @@ export default function FinanceReport({ collected, outstanding, payroll, dailyCh
                                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                                     <XAxis dataKey="day" tick={{ fontSize: 11 }} />
                                     <YAxis tick={{ fontSize: 11 }} />
-                                    <Tooltip formatter={(v: number) => [`$${fmt(v)}`, 'Collected']} />
+                                    <Tooltip formatter={(v: any) => [`$${fmt(v)}`, 'Collected']} />
                                     <Area type="monotone" dataKey="amount" stroke="#6366f1" fill="url(#colorFee)" strokeWidth={2} isAnimationActive={false} />
                                 </AreaChart>
                             </ResponsiveContainer>

@@ -181,7 +181,7 @@ export default function BulkPromote({
             target_academic_year: selectedYearObj?.name || '2026/2027',
             target_term: targetTerm,
             effective_date: effectiveDate,
-            promotions: promotionsPayload,
+            promotions: promotionsPayload as any,
         });
     };
 

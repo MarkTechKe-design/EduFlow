@@ -19,13 +19,7 @@ import {
     Smartphone
 } from 'lucide-react';
 
-interface Props extends PageProps {
-    school: {
-        id: number;
-        name: string;
-        slug: string;
-    };
-    mpesaConfig?: {
+interface Props extends PageProps {mpesaConfig?: {
         shortcode?: string | null;
         shortcode_type?: 'paybill' | 'till';
         consumer_key?: string | null;
@@ -112,7 +106,7 @@ export default function PaymentIntegrations({ auth, school, mpesaConfig, bankCon
                                 Payment Gateways & Automated Reconciliation
                             </h1>
                             <p className="text-xs text-slate-500 mt-0.5">
-                                Manage direct M-Pesa C2B/STK Push ingestion endpoints and bank settlement accounts for {school.name}.
+                                Manage direct M-Pesa C2B/STK Push ingestion endpoints and bank settlement accounts for {school?.name}.
                             </p>
                         </div>
                     </div>

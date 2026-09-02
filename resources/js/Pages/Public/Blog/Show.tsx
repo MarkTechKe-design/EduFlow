@@ -93,7 +93,7 @@ export default function BlogShow({ post, relatedPosts = [], navigation, footerNa
         if (!bodyText) return null;
 
         const rawLines = bodyText.replace(/\r\n/g, '\n').split('\n');
-        const elements: JSX.Element[] = [];
+        const elements: React.ReactNode[] = [];
         let currentList: string[] = [];
 
         function flushList(keyPrefix: number) {

@@ -17,7 +17,7 @@ interface FeeAllocation {
     invoice?: { invoice_number: string; term: string } | null;
 }
 
-interface Props extends PageProps {
+interface Props extends Omit<PageProps, "school"> {
     payment: {
         id: number;
         receipt_no: string;

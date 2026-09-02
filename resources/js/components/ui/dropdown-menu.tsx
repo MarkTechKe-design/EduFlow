@@ -12,7 +12,7 @@ function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
   return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />
 }
 
-function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {
+function DropdownMenuTrigger({ asChild, ...props }: MenuPrimitive.Trigger.Props & { asChild?: boolean }) {
   return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />
 }
 
@@ -71,12 +71,12 @@ function DropdownMenuLabel({
   )
 }
 
-function DropdownMenuItem({
+function DropdownMenuItem({ asChild,
   className,
   inset,
   variant = "default",
   ...props
-}: MenuPrimitive.Item.Props & {
+}: MenuPrimitive.Item.Props & { asChild?: boolean; 
   inset?: boolean
   variant?: "default" | "destructive"
 }) {

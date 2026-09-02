@@ -39,9 +39,7 @@ export default function ModuleManager({ schools, selectedSchool, modules, filter
 
     function saveAll(e: React.FormEvent) {
         e.preventDefault();
-        form.post('/super-admin/module-manager/bulk', {
-            data: { school_id: schoolId, modules: form.data.modules },
-        });
+        router.post('/super-admin/module-manager/bulk', { school_id: schoolId, modules: form.data.modules } as any);
     }
 
     return (

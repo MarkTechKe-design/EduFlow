@@ -213,7 +213,16 @@ class ParentPortalController extends Controller
         $records = collect([]);
         if ($selectedChildId && Schema::hasTable('attendances')) {
             $records = Attendance::query()
-                ->where('student_id', $selectedChildId)
+                ->where(function ($q) use ($selectedChildId) {
+                    $q->where(function ($sub) use ($selectedChildId) {
+                        $sub->where('attendable_id', $selectedChildId)
+                            ->whereIn('attendable_type', [
+                                \App\Models\Student::class,
+                                'student',
+                                'Student',
+                            ]);
+                    });
+                })
                 ->orderByDesc('date')
                 ->limit(30)
                 ->get();

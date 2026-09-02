@@ -59,7 +59,7 @@ export default function LegalView({ type, branding, page, sections = [] }: Props
 
         // Split text by lines to handle both double-breaks and inline list items
         const rawLines = bodyText.replace(/\r\n/g, '\n').split('\n');
-        const elements: JSX.Element[] = [];
+        const elements: React.ReactNode[] = [];
 
         let currentList: string[] = [];
 

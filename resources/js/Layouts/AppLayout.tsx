@@ -7,9 +7,11 @@ import MobileBottomNav from '@/components/layout/MobileBottomNav';
 
 interface Props {
     title?: string;
+    header?: React.ReactNode;
+    breadcrumbs?: Array<{ label: string; href?: string }>;
 }
 
-export default function AppLayout({ title = 'EduFlow Portal', children }: PropsWithChildren<Props>) {
+export default function AppLayout({ title = 'EduFlow Portal', header, breadcrumbs, children }: PropsWithChildren<Props>) {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const { auth } = usePage().props as any;
 

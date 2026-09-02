@@ -8,6 +8,7 @@ export interface User {
     school_id: number | null;
     status: string;
     last_login_at: string | null;
+    roles?: Array<{ id?: number; name: string } | string>;
 }
 
 export interface School {
@@ -40,7 +41,7 @@ export interface AcademicYear {
     is_current: boolean;
 }
 
-export interface PageProps {
+export type PageProps<T extends Record<string, unknown> = Record<string, unknown>> = T & {
     auth: {
         user: User | null;
     };
@@ -51,19 +52,22 @@ export interface PageProps {
     };
     faviconUrl: string | null;
     errors: Record<string, string>;
-}
+    [key: string]: any;
+};
 
 export interface Guardian {
     id: number;
     school_id: number;
-    user_id: number | null;
+    user_id?: number | null;
     name: string;
-    relation: string;
-    phone: string | null;
-    email: string | null;
-    occupation: string | null;
-    address: string | null;
-    photo: string | null;
+    relation?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    occupation?: string | null;
+    address?: string | null;
+    photo?: string | null;
+    created_at?: string;
+    [key: string]: any;
 }
 
 export interface StudentDocument {
@@ -84,6 +88,7 @@ export interface Student {
     section_id: number | null;
     guardian_id: number | null;
     admission_no: string;
+    admission_number?: string;
     roll_no: string | null;
     first_name: string;
     middle_name?: string | null;
@@ -91,6 +96,10 @@ export interface Student {
     full_name: string;
     gender: 'male' | 'female' | 'other';
     date_of_birth: string | null;
+    dob?: string | null;
+    birth_certificate_no?: string | null;
+    nemis_upi?: string | null;
+    assessment_no?: string | null;
     blood_group: string | null;
     religion: string | null;
     nationality: string;
@@ -102,13 +111,23 @@ export interface Student {
     category: 'general' | 'disabled' | 'quota';
     status: 'active' | 'alumni' | 'transferred' | 'inactive';
     admission_date: string | null;
+    admission_type?: string | null;
     previous_school: string | null;
+    guardian_name?: string | null;
+    guardian_relation?: string | null;
+    guardian_phone?: string | null;
+    emergency_contact?: string | null;
+    medical_info?: string | null;
     created_at: string;
     school_class?: SchoolClass;
+    class?: SchoolClass | { id?: number; name: string };
     enrollments?: StudentEnrollment[];
     section?: Section;
     guardian?: Guardian;
     documents?: StudentDocument[];
+    student_guardians?: StudentGuardian[];
+    medical_profile?: any;
+    [key: string]: any;
 }
 
 export interface SchoolClass {
@@ -301,19 +320,7 @@ export interface StudentEnrollment {
     academic_year_relation?: AcademicYear;
 }
 
-export interface Guardian {
-    id: number;
-    school_id: number;
-    user_id?: number | null;
-    name: string;
-    relation?: string | null;
-    phone?: string | null;
-    email?: string | null;
-    occupation?: string | null;
-    address?: string | null;
-    photo?: string | null;
-    created_at?: string;
-}
+// Guardian defined above
 
 export interface StudentGuardian {
     id: number;
@@ -399,4 +406,25 @@ export interface CbcAssessment {
     strands?: AssessmentStrand[];
     strands_count?: number;
     scores_count?: number;
+}
+
+
+export interface PaginatedData<T = any> {
+    data: T[];
+    current_page: number;
+    first_page_url: string;
+    from: number | null;
+    last_page: number;
+    last_page_url: string;
+    links: Array<{
+        url: string | null;
+        label: string;
+        active: boolean;
+    }>;
+    next_page_url: string | null;
+    path: string;
+    per_page: number;
+    prev_page_url: string | null;
+    to: number | null;
+    total: number;
 }

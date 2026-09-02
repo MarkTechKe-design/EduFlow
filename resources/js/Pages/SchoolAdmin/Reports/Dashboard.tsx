@@ -91,7 +91,7 @@ export default function Dashboard({
                                         <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" vertical={false} />
                                         <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
-                                        <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--card)', fontSize: 12 }} formatter={(value: number) => [formatCurrency(value), 'Collected']} />
+                                        <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--card)', fontSize: 12 }} formatter={((value: any) => [formatCurrency(value), 'Collected']) as any} />
                                         <Bar dataKey="amount" fill="var(--brand-primary)" radius={[6, 6, 0, 0]} isAnimationActive={false} />
                                     </BarChart>
                                 </ResponsiveContainer>

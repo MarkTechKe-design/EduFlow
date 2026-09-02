@@ -2,6 +2,7 @@ import React from 'react';
 import { LucideIcon } from 'lucide-react';
 
 interface MetricCardProps {
+    trend?: { value: string; direction: 'up' | 'down' | 'neutral' };
     title: string;
     value: string | number;
     icon: LucideIcon;

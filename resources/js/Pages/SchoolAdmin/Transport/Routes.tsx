@@ -52,7 +52,7 @@ export default function TransportRoutes({ routes, vehicles, filters }: Props) {
         setSaving(true);
         const url    = editing ? `/school/transport/routes/${editing.id}` : '/school/transport/routes';
         const method = editing ? 'put' : 'post';
-        router[method](url, { ...form, stops }, {
+        router[method](url, { ...form, stops } as any, {
             preserveScroll: true,
             onSuccess: () => { setOpen(false); setSaving(false); },
             onError:   () => setSaving(false),

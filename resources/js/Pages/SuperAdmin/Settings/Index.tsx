@@ -102,7 +102,7 @@ function GeneralTab({ settings, logoUrl, faviconUrl, loginBgUrl, registerBgUrls 
     }
 
     return (
-        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/general', { forceFormData: true,  forceFormData: true }); }}>
+        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/general', { forceFormData: true }); }}>
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base">Platform Identity</CardTitle>
@@ -300,7 +300,7 @@ function PaymentTab({ settings }: { settings: Record<string, string> }) {
     const { flash } = usePage<any>().props;
 
     return (
-        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/payment', { forceFormData: true,  forceFormData: true, preserveScroll: true }); }}>
+        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/payment', { forceFormData: true, preserveScroll: true }); }}>
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base">Paystack Payment Gateway</CardTitle>
@@ -310,8 +310,7 @@ function PaymentTab({ settings }: { settings: Record<string, string> }) {
                     {flash?.success && <SuccessBanner message={flash.success} />}
                     <div>
                         <Label>Publishable Key (pk_live_…)</Label>
-                        <Input autoComplete="new-password" placeholder="pk_live_..." value={form.data.paystack_key} onChange={e => form.setData('paystack_key', e.target.value)}
-                            placeholder="pk_live_..." className="font-mono text-sm" />
+                        <Input autoComplete="new-password" placeholder="pk_live_..." value={form.data.paystack_key} onChange={e => form.setData('paystack_key', e.target.value)} className="font-mono text-sm" />
                     </div>
                     <div>
                         <Label>Secret Key (sk_live_…)</Label>
@@ -372,7 +371,7 @@ function SmtpTab({ settings }: { settings: Record<string, string> }) {
     const { flash } = usePage<any>().props;
 
     return (
-        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/smtp', { forceFormData: true,  forceFormData: true, preserveScroll: true }); }}>
+        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/smtp', { forceFormData: true, preserveScroll: true }); }}>
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base">Platform Email (SMTP)</CardTitle>
@@ -458,7 +457,7 @@ function LocalizationTab({ settings }: { settings: Record<string, string> }) {
     const { flash } = usePage<any>().props;
 
     return (
-        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/localization', { forceFormData: true,  forceFormData: true, preserveScroll: true }); }}>
+        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/localization', { forceFormData: true, preserveScroll: true }); }}>
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base">Localization Defaults</CardTitle>
@@ -525,7 +524,7 @@ function MaintenanceTab({ settings }: { settings: Record<string, string> }) {
     const { flash } = usePage<any>().props;
 
     return (
-        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/maintenance', { forceFormData: true,  forceFormData: true, preserveScroll: true }); }}>
+        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/maintenance', { forceFormData: true, preserveScroll: true }); }}>
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base">Maintenance Mode</CardTitle>
@@ -587,7 +586,7 @@ function StorageTab({ settings }: { settings: Record<string, string> }) {
     const { flash } = usePage<any>().props;
 
     return (
-        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/storage', { forceFormData: true,  forceFormData: true, preserveScroll: true }); }}>
+        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/storage', { forceFormData: true, preserveScroll: true }); }}>
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base">Storage & Upload Limits</CardTitle>
@@ -693,7 +692,7 @@ function NotificationTemplatesTab({ settings }: { settings: Record<string, strin
 
                     {/* Template editor */}
                     <form className="flex-1 space-y-4"
-                        onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/templates', { forceFormData: true,  forceFormData: true, preserveScroll: true }); }}>
+                        onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/templates', { forceFormData: true, preserveScroll: true }); }}>
                         <input type="hidden" value={form.data.template_key} readOnly />
                         <p className="text-xs text-slate-500">{tpl.desc}</p>
                         <div>
@@ -749,7 +748,7 @@ function AuditLogTab({ settings }: { settings: Record<string, string> }) {
     ];
 
     return (
-        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/audit', { forceFormData: true,  forceFormData: true, preserveScroll: true }); }}>
+        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/audit', { forceFormData: true, preserveScroll: true }); }}>
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base">Audit Log Retention</CardTitle>

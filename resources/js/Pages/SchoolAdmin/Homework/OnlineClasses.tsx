@@ -46,7 +46,7 @@ interface Props extends PageProps {
 }
 
 export default function OnlineClassesIndex({ auth, classes, schoolClasses = [], subjects = [] }: Props) {
-    const userRoles = auth.user.roles?.map((r: any) => typeof r === 'string' ? r : r.name) || [];
+    const userRoles = auth.user?.roles?.map((r: any) => typeof r === 'string' ? r : r.name) || [];
     
     // Host permissions (Can create, start, end meetings)
     const canHost = userRoles.some((r: string) => ['school-admin', 'principal', 'teacher', 'super-admin'].includes(r));

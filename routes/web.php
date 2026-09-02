@@ -307,8 +307,16 @@ Route::middleware(['auth', 'verified', 'active', 'module', 'school-role', 'role:
         // Attendance
         Route::get('/attendance', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'index'])->middleware('permission:attendance.view')->name('attendance.index');
         Route::post('/attendance', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'store'])->middleware('permission:attendance.mark')->name('attendance.store');
-        Route::get('/attendance/staff', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'staffIndex'])->middleware('permission:attendance.view')->name('attendance.staff.index');
+        Route::get('/attendance/staff/{staff}/profile', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'staffProfile'])->middleware('permission:attendance.view')->name('attendance.staff.profile');
+    Route::get('/attendance/staff', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'staffIndex'])->middleware('permission:attendance.view')->name('attendance.staff.index');
         Route::post('/attendance/staff', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'staffStore'])->middleware('permission:attendance.mark')->name('attendance.staff.store');
+            Route::post('/attendance/staff/apply-leave', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'applyStaffLeave'])->middleware('permission:attendance.mark')->name('attendance.staff.apply-leave');
+            Route::post('/attendance/staff/assign-duty', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'assignStaffDuty'])->middleware('permission:attendance.mark')->name('attendance.staff.assign-duty');
+            Route::get('/attendance/duty-roster', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'dutyRosterIndex'])->middleware('permission:attendance.view')->name('attendance.duty-roster.index');
+            Route::post('/attendance/duty-roster', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'dutyRosterStore'])->middleware('permission:attendance.mark')->name('attendance.duty-roster.store');
+            Route::post('/attendance/duty-roster/stand-in', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'dutyRosterStandIn'])->middleware('permission:attendance.mark')->name('attendance.duty-roster.stand-in');
+Route::post('/attendance/duty-roster/duplicate-previous', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'duplicatePreviousDutyRoster'])->middleware('permission:attendance.mark')->name('attendance.duty-roster.duplicate-previous');
+            Route::get('/attendance/duty-roster/export-csv', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'dutyRosterExportCsv'])->middleware('permission:attendance.export')->name('attendance.duty-roster.export-csv');
         Route::get('/attendance/students/{student}/calendar', [\App\Http\Controllers\SchoolAdmin\AttendanceController::class, 'studentCalendar'])->middleware('permission:attendance.view')->name('attendance.student-calendar');
 
         // Exams & Grade Scales

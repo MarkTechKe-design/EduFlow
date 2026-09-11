@@ -155,8 +155,8 @@ Route::middleware(['auth', 'active', 'school-role'])->prefix('school')->name('sc
 
         Route::delete('/settings/admins/{user}', [\App\Http\Controllers\SchoolAdmin\SchoolUserController::class, 'destroy'])->name('settings.admins.destroy');
         Route::put('/settings/admins/{user}', [\App\Http\Controllers\SchoolAdmin\SchoolUserController::class, 'update'])->name('settings.admins.update');
-        Route::post('/settings/admins/{user}/suspend', [\App\Http\Controllers\SchoolAdmin\SchoolUserController::class, 'suspend'])->name('settings.admins.suspend');
-        Route::post('/settings/admins/{user}/activate', [\App\Http\Controllers\SchoolAdmin\SchoolUserController::class, 'activate'])->name('settings.admins.activate');
+        Route::match(['post', 'patch'], '/settings/admins/{user}/suspend', [\App\Http\Controllers\SchoolAdmin\SchoolUserController::class, 'suspend'])->name('settings.admins.suspend');
+        Route::match(['post', 'patch'], '/settings/admins/{user}/activate', [\App\Http\Controllers\SchoolAdmin\SchoolUserController::class, 'activate'])->name('settings.admins.activate');
 
         Route::match(['post', 'patch'], '/teacher-assignments/{assignment}/conclude', [\App\Http\Controllers\SchoolAdmin\TeacherAssignmentController::class, 'concludeOrTransfer'])->name('teacher-assignments.conclude');
         Route::post('/timetable/slots/save', [\App\Http\Controllers\SchoolAdmin\TimetableController::class, 'saveSlots'])->name('timetable.slots.save');
@@ -441,7 +441,7 @@ Route::post('/attendance/duty-roster/duplicate-previous', [\App\Http\Controllers
         Route::put('/communication/email-templates/{emailTemplate}', [\App\Http\Controllers\SchoolAdmin\CommunicationController::class, 'updateEmailTemplate'])->name('communication.email-templates.update');
         Route::get('/communication/notifications', [\App\Http\Controllers\SchoolAdmin\CommunicationController::class, 'notifications'])->name('communication.notifications');
         Route::put('/communication/notifications/{notification}/read', [\App\Http\Controllers\SchoolAdmin\CommunicationController::class, 'markNotificationRead'])->name('communication.notifications.read');
-        Route::post('/communication/notifications/read-all', [\App\Http\Controllers\SchoolAdmin\CommunicationController::class, 'markAllNotificationsRead'])->name('communication.notifications.read-all');
+        Route::match(['post', 'put'], '/communication/notifications/read-all', [\App\Http\Controllers\SchoolAdmin\CommunicationController::class, 'markAllNotificationsRead'])->name('communication.notifications.read-all');
 
         // Hostel
         Route::get('/hostel', [\App\Http\Controllers\SchoolAdmin\HostelController::class, 'index'])->middleware('permission:hostel.view')->name('hostel.index');
@@ -464,6 +464,12 @@ Route::post('/attendance/duty-roster/duplicate-previous', [\App\Http\Controllers
         Route::delete('/homework/{homework}', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'destroy'])->name('homework.destroy');
         Route::get('/homework/lesson-plans', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'lessonPlans'])->middleware('permission:lessons.view')->name('homework.lesson-plans.index');
         Route::get('/homework/syllabi', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'syllabi'])->middleware('permission:syllabus.view')->name('homework.syllabi.index');
+        Route::post('/homework/lesson-plans', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'storeLessonPlan'])->name('homework.lesson-plans.store');
+        Route::put('/homework/lesson-plans/{lessonPlan}/review', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'reviewLessonPlan'])->name('homework.lesson-plans.review');
+        Route::post('/homework/syllabi', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'storeSyllabus'])->name('homework.syllabi.store');
+        Route::put('/homework/syllabi/{syllabus}', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'updateSyllabus'])->name('homework.syllabi.update');
+        Route::put('/homework/syllabi/{syllabus}/review', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'reviewSyllabus'])->name('homework.syllabi.review');
+        Route::post('/homework/submissions/{submission}/grade', [\App\Http\Controllers\SchoolAdmin\HomeworkController::class, 'gradeSubmission'])->name('homework.submissions.grade');
         Route::get('/online-classes', [\App\Http\Controllers\SchoolAdmin\OnlineClassController::class, 'index'])->name('online-classes.index');
         Route::post('/online-classes', [\App\Http\Controllers\SchoolAdmin\OnlineClassController::class, 'store'])->name('online-classes.store');
         Route::post('/online-classes/{onlineClass}/start', [\App\Http\Controllers\SchoolAdmin\OnlineClassController::class, 'start'])->name('online-classes.start');
@@ -489,7 +495,11 @@ Route::post('/attendance/duty-roster/duplicate-previous', [\App\Http\Controllers
         // Settings
         Route::get('/settings', [\App\Http\Controllers\SchoolAdmin\SettingsController::class, 'index'])->middleware('permission:settings.view')->name('settings.index');
         Route::post('/settings/general', [\App\Http\Controllers\SchoolAdmin\SettingsController::class, 'saveGeneral'])->middleware('permission:settings.edit')->name('settings.general');
+        Route::post('/settings/branding', [\App\Http\Controllers\SchoolAdmin\SettingsController::class, 'saveBranding'])->middleware('permission:settings.edit')->name('settings.branding');
+        Route::post('/settings/academic', [\App\Http\Controllers\SchoolAdmin\SettingsController::class, 'saveAcademic'])->middleware('permission:settings.edit')->name('settings.academic');
+        Route::post('/settings/notifications', [\App\Http\Controllers\SchoolAdmin\SettingsController::class, 'saveNotifications'])->middleware('permission:settings.edit')->name('settings.notifications');
         Route::get('/settings/admins', [\App\Http\Controllers\SchoolAdmin\SchoolUserController::class, 'index'])->middleware('permission:users.view')->name('settings.admins');
+        Route::post('/settings/admins', [\App\Http\Controllers\SchoolAdmin\SchoolUserController::class, 'store'])->middleware('permission:users.create')->name('settings.admins.store');
         Route::get('/settings/integrations', [\App\Http\Controllers\SchoolAdmin\IntegrationController::class, 'index'])->middleware('permission:settings.edit')->name('settings.integrations');
         Route::resource('holidays', \App\Http\Controllers\SchoolAdmin\HolidayController::class)->except(['create', 'edit', 'show']);
     });

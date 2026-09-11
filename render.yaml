@@ -4,8 +4,8 @@ services:
     env: php
     region: frankfurt
     plan: free
-    buildCommand: "composer install --no-dev --optimize-autoloader && npm install && npm run build && php artisan config:clear && php artisan cache:clear && touch database/database.sqlite && php artisan migrate --force && php artisan db:seed --force && php artisan storage:link"
-    startCommand: "php artisan serve --host=0.0.0.0 --port=$PORT"
+    buildCommand: "composer install --no-dev --optimize-autoloader && npm install && npm run build && mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache && php artisan config:clear && php artisan cache:clear && mkdir -p storage/framework/cache/data && chmod -R 775 storage bootstrap/cache && touch database/database.sqlite && php artisan migrate --force && php artisan db:seed --force && php artisan storage:link"
+    startCommand: "mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache && chmod -R 775 storage bootstrap/cache && php artisan serve --host=0.0.0.0 --port=$PORT"
     envVars:
       - key: APP_ENV
         value: production

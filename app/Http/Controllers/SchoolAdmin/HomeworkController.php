@@ -83,22 +83,37 @@ class HomeworkController extends Controller
         $subjects = Subject::where('school_id', $schoolId)->orderBy('name')->get(['id', 'name', 'code', 'class_id']);
         $staff = Staff::where('school_id', $schoolId)->where('status', 'active')->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'emp_id']);
 
-        $plansData = [
-            'data'         => [],
-            'current_page' => 1,
-            'last_page'    => 1,
-            'per_page'     => 15,
-            'total'        => 0,
-            'from'         => null,
-            'to'           => null,
-            'links'        => [],
-        ];
+        $query = \App\Models\LessonPlan::with(['schoolClass:id,name', 'subject:id,name,code', 'teacher:id,first_name,last_name,emp_id', 'reviewer:id,name'])
+            ->where('school_id', $schoolId);
+
+        if ($request->filled('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('class_id')) {
+            $query->where('class_id', $request->class_id);
+        }
+
+        if ($request->filled('subject_id')) {
+            $query->where('subject_id', $request->subject_id);
+        }
+
+        if ($request->filled('term') && $request->term !== 'all') {
+            $query->where('term', $request->term);
+        }
+
+        $plansData = $query->latest('week_start')->paginate(15)->withQueryString();
+
+        $allSchoolPlans = \App\Models\LessonPlan::where('school_id', $schoolId);
+        if ($request->filled('term') && $request->term !== 'all') {
+            $allSchoolPlans->where('term', $request->term);
+        }
 
         $stats = [
-            'total'     => 0,
-            'approved'  => 0,
-            'submitted' => 0,
-            'rejected'  => 0,
+            'total'     => (clone $allSchoolPlans)->count(),
+            'approved'  => (clone $allSchoolPlans)->where('status', 'approved')->count(),
+            'submitted' => (clone $allSchoolPlans)->where('status', 'submitted')->count(),
+            'rejected'  => (clone $allSchoolPlans)->where('status', 'rejected')->count(),
         ];
 
         return Inertia::render('SchoolAdmin/Homework/LessonPlans', [
@@ -123,22 +138,49 @@ class HomeworkController extends Controller
         $classes = SchoolClass::where('school_id', $schoolId)->orderBy('numeric_name')->get(['id', 'name']);
         $subjects = Subject::where('school_id', $schoolId)->orderBy('name')->get(['id', 'name', 'code', 'class_id']);
 
-        $syllabiData = [
-            'data'         => [],
-            'current_page' => 1,
-            'last_page'    => 1,
-            'per_page'     => 15,
-            'total'        => 0,
-            'from'         => null,
-            'to'           => null,
-            'links'        => [],
-        ];
+        $query = \App\Models\Syllabus::with([
+            'schoolClass:id,name',
+            'subject:id,name,code',
+            'teacher:id,first_name,last_name,emp_id',
+            'reviewer:id,name',
+        ])->where('school_id', $schoolId);
+
+        if ($request->filled('class_id')) {
+            $query->where('class_id', $request->class_id);
+        }
+
+        if ($request->filled('subject_id')) {
+            $query->where('subject_id', $request->subject_id);
+        }
+
+        if ($request->filled('term') && $request->term !== 'all') {
+            $query->where('term', $request->term);
+        }
+
+        if ($request->filled('academic_year') && $request->academic_year !== 'all') {
+            $query->where('academic_year', $request->academic_year);
+        }
+
+        $syllabiData = $query->latest()->paginate(15)->withQueryString();
+
+        $allSchoolSyllabi = \App\Models\Syllabus::where('school_id', $schoolId);
+        if ($request->filled('term') && $request->term !== 'all') {
+            $allSchoolSyllabi->where('term', $request->term);
+        }
+        if ($request->filled('academic_year') && $request->academic_year !== 'all') {
+            $allSchoolSyllabi->where('academic_year', $request->academic_year);
+        }
+
+        $totalSyllabi = (clone $allSchoolSyllabi)->count();
+        $completed = (clone $allSchoolSyllabi)->where('status', 'completed')->count();
+        $inProgress = (clone $allSchoolSyllabi)->where('status', 'in_progress')->count();
+        $avgProgress = $totalSyllabi > 0 ? round((float)(clone $allSchoolSyllabi)->avg('completion_percent'), 1) : 0;
 
         $stats = [
-            'total_syllabi'    => 0,
-            'completed'        => 0,
-            'in_progress'      => 0,
-            'average_progress' => 0,
+            'total_syllabi'    => $totalSyllabi,
+            'completed'        => $completed,
+            'in_progress'      => $inProgress,
+            'average_progress' => $avgProgress,
         ];
 
         return Inertia::render('SchoolAdmin/Homework/Syllabi', [
@@ -238,5 +280,144 @@ class HomeworkController extends Controller
         }
 
         return Storage::disk('private')->download($homework->attachment);
+    }
+
+    public function storeLessonPlan(Request $request)
+    {
+        $schoolId = $request->user()->school_id;
+        $validated = $request->validate([
+            'class_id'             => 'required|exists:classes,id',
+            'subject_id'           => 'required|exists:subjects,id',
+            'teacher_id'           => 'nullable|exists:staff,id',
+            'title'                => 'required|string|max:255',
+            'term'                 => 'required|string|max:20',
+            'strand'               => 'nullable|string|max:255',
+            'sub_strand'           => 'nullable|string|max:255',
+            'objectives'           => 'nullable|string',
+            'core_competencies'    => 'nullable|array',
+            'values_addressed'     => 'nullable|array',
+            'pcis'                 => 'nullable|string',
+            'content'              => 'nullable|string',
+            'teaching_methods'     => 'nullable|array',
+            'resources'            => 'nullable|array',
+            'week_start'           => 'required|date',
+            'lesson_duration_mins' => 'nullable|integer|min:10|max:180',
+        ]);
+
+        \App\Models\LessonPlan::create(array_merge($validated, [
+            'school_id' => $schoolId,
+            'status'    => 'submitted',
+        ]));
+
+        return back()->with('success', 'Lesson plan submitted successfully.');
+    }
+
+    public function reviewLessonPlan(Request $request, \App\Models\LessonPlan $lessonPlan)
+    {
+        abort_if($lessonPlan->school_id !== $request->user()->school_id, 403);
+
+        $validated = $request->validate([
+            'status'            => 'required|in:approved,rejected',
+            'reviewer_feedback' => 'nullable|string',
+        ]);
+
+        $lessonPlan->update([
+            'status'            => $validated['status'],
+            'reviewer_feedback' => $validated['reviewer_feedback'] ?? null,
+            'reviewed_by'       => $request->user()->id,
+            'reviewed_at'       => now(),
+        ]);
+
+        return back()->with('success', 'Lesson plan review updated.');
+    }
+
+    public function storeSyllabus(Request $request)
+    {
+        $schoolId = $request->user()->school_id;
+        $validated = $request->validate([
+            'class_id'              => 'required|exists:classes,id',
+            'subject_id'            => 'required|exists:subjects,id',
+            'teacher_id'            => 'nullable|exists:staff,id',
+            'academic_year'         => 'required|string|max:20',
+            'term'                  => 'required|string|max:20',
+            'curriculum_type'       => 'required|string|max:30',
+            'title'                 => 'required|string|max:255',
+            'topics'                => 'nullable|array',
+            'strands'               => 'nullable|array',
+            'total_lessons_planned' => 'required|integer|min:1',
+        ]);
+
+        \App\Models\Syllabus::create(array_merge($validated, [
+            'school_id'             => $schoolId,
+            'completion_percent'    => 0,
+            'total_lessons_taught'  => 0,
+            'status'                => 'in_progress',
+        ]));
+
+        return back()->with('success', 'Course syllabus registered successfully.');
+    }
+
+    public function updateSyllabus(Request $request, \App\Models\Syllabus $syllabus)
+    {
+        abort_if($syllabus->school_id !== $request->user()->school_id, 403);
+
+        $validated = $request->validate([
+            'title'                 => 'sometimes|required|string|max:255',
+            'total_lessons_planned' => 'sometimes|required|integer|min:1',
+            'total_lessons_taught'  => 'sometimes|required|integer|min:0',
+            'status'                => 'sometimes|required|in:in_progress,completed',
+        ]);
+
+        if (isset($validated['total_lessons_taught']) && isset($validated['total_lessons_planned'])) {
+            $validated['completion_percent'] = round(($validated['total_lessons_taught'] / max(1, $validated['total_lessons_planned'])) * 100, 2);
+        }
+
+        $syllabus->update($validated);
+
+        return back()->with('success', 'Syllabus progress updated.');
+    }
+
+    public function reviewSyllabus(Request $request, \App\Models\Syllabus $syllabus)
+    {
+        abort_if($syllabus->school_id !== $request->user()->school_id, 403);
+
+        $validated = $request->validate([
+            'reviewer_feedback' => 'required|string',
+        ]);
+
+        $syllabus->update([
+            'reviewer_feedback' => $validated['reviewer_feedback'],
+            'reviewed_by'       => $request->user()->id,
+            'reviewed_at'       => now(),
+        ]);
+
+        return back()->with('success', 'Syllabus review recorded.');
+    }
+
+    public function gradeSubmission(Request $request, $submissionId)
+    {
+        $schoolId = $request->user()->school_id;
+        $submission = \Illuminate\Support\Facades\DB::table('homework_submissions')
+            ->where('id', $submissionId)
+            ->where('school_id', $schoolId)
+            ->first();
+
+        abort_if(!$submission, 404);
+
+        $validated = $request->validate([
+            'marks'    => 'required|numeric|min:0',
+            'feedback' => 'nullable|string',
+        ]);
+
+        \Illuminate\Support\Facades\DB::table('homework_submissions')
+            ->where('id', $submissionId)
+            ->update([
+                'marks'      => $validated['marks'],
+                'feedback'   => $validated['feedback'] ?? null,
+                'status'     => 'graded',
+                'updated_at' => now(),
+            ]);
+
+        return back()->with('success', 'Submission graded successfully.');
     }
 }

@@ -51,17 +51,24 @@ class ParentStudentSyncSeeder extends Seeder
                 ->get();
 
             foreach ($students as $student) {
-                $hasPivot = DB::table('guardian_student')
+                $hasPivot = DB::table('student_guardians')
                     ->where('guardian_id', $guardianId)
                     ->where('student_id', $student->id)
                     ->exists();
 
                 if (!$hasPivot) {
-                    DB::table('guardian_student')->insert([
-                        'guardian_id' => $guardianId,
-                        'student_id'  => $student->id,
-                        'created_at'  => now(),
-                        'updated_at'  => now(),
+                    DB::table('student_guardians')->insert([
+                        'school_id'                  => $school->id,
+                        'guardian_id'                => $guardianId,
+                        'student_id'                 => $student->id,
+                        'relationship_type'          => 'Father',
+                        'is_primary'                 => 1,
+                        'has_legal_custody'          => 1,
+                        'receives_sms_notifications' => 1,
+                        'receives_report_cards'      => 1,
+                        'emergency_priority'         => 1,
+                        'created_at'                 => now(),
+                        'updated_at'                 => now(),
                     ]);
                 }
             }

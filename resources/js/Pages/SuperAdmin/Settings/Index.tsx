@@ -53,7 +53,7 @@ function SuccessBanner({ message }: { message: string }) {
     );
 }
 
-/* ── Platform General ── */
+/* â”€â”€ Platform General â”€â”€ */
 function GeneralTab({ settings, logoUrl, faviconUrl, loginBgUrl, registerBgUrls = [] }: Props) {
     const form = useForm<{
         platform_name: string;
@@ -102,7 +102,7 @@ function GeneralTab({ settings, logoUrl, faviconUrl, loginBgUrl, registerBgUrls 
     }
 
     return (
-        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/general', { forceFormData: true }); }}>
+        <form onSubmit={e => { e.preventDefault(); form.post('/super-admin/settings/general', { forceFormData: true, preserveScroll: true, onError: (errs) => { alert('Upload failed:\n' + Object.values(errs).join('\n')); } }); }}>
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base">Platform Identity</CardTitle>
@@ -287,7 +287,7 @@ function GeneralTab({ settings, logoUrl, faviconUrl, loginBgUrl, registerBgUrls 
     );
 }
 
-/* ── Payment Gateway ── */
+/* â”€â”€ Payment Gateway â”€â”€ */
 function PaymentTab({ settings }: { settings: Record<string, string> }) {
     const [showSecret,  setShowSecret]  = useState(false);
     const [showWebhook, setShowWebhook] = useState(false);
@@ -309,11 +309,11 @@ function PaymentTab({ settings }: { settings: Record<string, string> }) {
                 <CardContent className="space-y-4">
                     {flash?.success && <SuccessBanner message={flash.success} />}
                     <div>
-                        <Label>Publishable Key (pk_live_…)</Label>
+                        <Label>Publishable Key (pk_live_â€¦)</Label>
                         <Input autoComplete="new-password" placeholder="pk_live_..." value={form.data.paystack_key} onChange={e => form.setData('paystack_key', e.target.value)} className="font-mono text-sm" />
                     </div>
                     <div>
-                        <Label>Secret Key (sk_live_…)</Label>
+                        <Label>Secret Key (sk_live_â€¦)</Label>
                         <div className="relative">
                             <Input type={showSecret ? 'text' : 'password'}
                                 value={form.data.paystack_secret} onChange={e => form.setData('paystack_secret', e.target.value)}
@@ -325,7 +325,7 @@ function PaymentTab({ settings }: { settings: Record<string, string> }) {
                         </div>
                     </div>
                     <div>
-                        <Label>Webhook Secret (whsec_…)</Label>
+                        <Label>Webhook Secret (whsec_â€¦)</Label>
                         <div className="relative">
                             <Input type={showWebhook ? 'text' : 'password'}
                                 value={form.data.paystack_webhook} onChange={e => form.setData('paystack_webhook', e.target.value)}
@@ -356,7 +356,7 @@ function PaymentTab({ settings }: { settings: Record<string, string> }) {
     );
 }
 
-/* ── Platform SMTP ── */
+/* â”€â”€ Platform SMTP â”€â”€ */
 function SmtpTab({ settings }: { settings: Record<string, string> }) {
     const [showPass, setShowPass] = useState(false);
     const form = useForm({
@@ -446,7 +446,7 @@ function SmtpTab({ settings }: { settings: Record<string, string> }) {
     );
 }
 
-/* ── Localization ── */
+/* â”€â”€ Localization â”€â”€ */
 function LocalizationTab({ settings }: { settings: Record<string, string> }) {
     const form = useForm({
         default_timezone:    settings.default_timezone    ?? 'UTC',
@@ -514,7 +514,7 @@ function LocalizationTab({ settings }: { settings: Record<string, string> }) {
     );
 }
 
-/* ── Maintenance Mode ── */
+/* â”€â”€ Maintenance Mode â”€â”€ */
 function MaintenanceTab({ settings }: { settings: Record<string, string> }) {
     const isOn = settings.maintenance_mode === '1';
     const form = useForm({
@@ -576,7 +576,7 @@ function MaintenanceTab({ settings }: { settings: Record<string, string> }) {
     );
 }
 
-/* ── Storage & Upload Limits ── */
+/* â”€â”€ Storage & Upload Limits â”€â”€ */
 function StorageTab({ settings }: { settings: Record<string, string> }) {
     const form = useForm({
         upload_max_mb:        settings.upload_max_mb        ?? '10',
@@ -628,7 +628,7 @@ function StorageTab({ settings }: { settings: Record<string, string> }) {
     );
 }
 
-/* ── Notification Templates ── */
+/* â”€â”€ Notification Templates â”€â”€ */
 const TEMPLATES = [
     { key: 'welcome_school',      label: 'Welcome School',         desc: 'Sent when a new school is created.' },
     { key: 'subscription_expiry', label: 'Subscription Expiry',    desc: 'Sent 7 days before subscription expires.' },
@@ -699,13 +699,13 @@ function NotificationTemplatesTab({ settings }: { settings: Record<string, strin
                             <Label>Subject</Label>
                             <Input value={form.data.subject}
                                 onChange={e => form.setData('subject', e.target.value)}
-                                placeholder={`${tpl.label} subject line…`} />
+                                placeholder={`${tpl.label} subject lineâ€¦`} />
                         </div>
                         <div>
                             <Label>Body</Label>
                             <Textarea rows={8} value={form.data.body}
                                 onChange={e => form.setData('body', e.target.value)}
-                                placeholder="Email body…" className="font-mono text-sm" />
+                                placeholder="Email bodyâ€¦" className="font-mono text-sm" />
                         </div>
                         {/* Available variables */}
                         <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3">
@@ -730,7 +730,7 @@ function NotificationTemplatesTab({ settings }: { settings: Record<string, strin
     );
 }
 
-/* ── Audit Log Retention ── */
+/* â”€â”€ Audit Log Retention â”€â”€ */
 function AuditLogTab({ settings }: { settings: Record<string, string> }) {
     const form = useForm({
         audit_retention_days: settings.audit_retention_days ?? '90',
@@ -802,7 +802,7 @@ function AuditLogTab({ settings }: { settings: Record<string, string> }) {
     );
 }
 
-/* ── Main Page ── */
+/* â”€â”€ Main Page â”€â”€ */
 export default function SuperAdminSettings({ settings, logoUrl, faviconUrl, loginBgUrl, registerBgUrls = [] }: Props) {
     const [activeTab, setActiveTab] = useState<TabId>('general');
 

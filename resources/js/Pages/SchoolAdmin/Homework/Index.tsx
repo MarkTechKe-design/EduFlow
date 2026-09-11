@@ -213,13 +213,13 @@ export default function HomeworkIndex({
     function getLevelBadge(level?: string) {
         switch (level) {
             case 'EE':
-                return <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-200 font-bold">EE • Exceeding Expectations</Badge>;
+                return <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-200 font-bold">EE â€¢ Exceeding Expectations</Badge>;
             case 'ME':
-                return <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200 font-bold">ME • Meeting Expectations</Badge>;
+                return <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200 font-bold">ME â€¢ Meeting Expectations</Badge>;
             case 'AE':
-                return <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 font-bold">AE • Approaching Expectations</Badge>;
+                return <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 font-bold">AE â€¢ Approaching Expectations</Badge>;
             case 'BE':
-                return <Badge variant="outline" className="bg-red-50 text-red-800 border-red-200 font-bold">BE • Below Expectations</Badge>;
+                return <Badge variant="outline" className="bg-red-50 text-red-800 border-red-200 font-bold">BE â€¢ Below Expectations</Badge>;
             default:
                 return <Badge variant="outline" className="bg-slate-100 text-slate-600 font-bold">Ungraded</Badge>;
         }
@@ -342,21 +342,21 @@ export default function HomeworkIndex({
                                             <p className="font-bold text-slate-900">{item.title}</p>
                                             {item.strand && (
                                                 <p className="text-[10px] text-indigo-600 font-semibold mt-0.5">
-                                                    Strand: {item.strand} {item.sub_strand ? `› ${item.sub_strand}` : ''}
+                                                    Strand: {item.strand} {item.sub_strand ? `â€º ${item.sub_strand}` : ''}
                                                 </p>
                                             )}
                                         </TableCell>
                                         <TableCell className="py-3.5 px-4">
-                                            <p className="font-bold text-slate-800">{item.school_class?.name ?? '—'}</p>
-                                            <p className="text-[10px] text-slate-400">{item.subject?.name ?? '—'}</p>
+                                            <p className="font-bold text-slate-800">{item.school_class?.name ?? 'â€”'}</p>
+                                            <p className="text-[10px] text-slate-400">{item.subject?.name ?? 'â€”'}</p>
                                         </TableCell>
                                         <TableCell className="py-3.5 px-4">
                                             <Badge variant="outline" className="capitalize text-[10px] font-bold bg-slate-50 text-slate-700 border-slate-200">
-                                                {item.task_type.replace('_', ' ')}
+                                                {item.task_type ? item.task_type.replace('_', ' ') : 'Homework'}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="py-3.5 px-4 text-slate-700">
-                                            {item.teacher ? `${item.teacher.first_name} ${item.teacher.last_name}` : '—'}
+                                            {item.teacher ? `${item.teacher.first_name} ${item.teacher.last_name}` : 'â€”'}
                                         </TableCell>
                                         <TableCell className="py-3.5 px-4 font-mono">
                                             <span className={isPastDue ? 'text-red-600 font-bold' : 'text-slate-600'}>
@@ -539,7 +539,7 @@ export default function HomeworkIndex({
                                                 {getLevelBadge(sub.performance_level)}
                                             </TableCell>
                                             <TableCell className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                                                {sub.score !== null && sub.score !== undefined ? `${sub.score}` : '—'}
+                                                {sub.score !== null && sub.score !== undefined ? `${sub.score}` : 'â€”'}
                                             </TableCell>
                                             <TableCell className="py-2.5 px-3 text-right">
                                                 <Button

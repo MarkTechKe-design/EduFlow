@@ -118,9 +118,13 @@ class VisitorLogController extends Controller
         return back()->with('success', 'Visitor check-in logged successfully.');
     }
 
-    public function checkout(VisitorLog $visitorLog)
+    public function checkout(mixed $visitorLog)
     {
-        if ($visitorLog->school_id !== $this->getSchoolId()) abort(403);
+        if (!$visitorLog instanceof VisitorLog) {
+            $visitorLog = VisitorLog::where('school_id', $this->getSchoolId())->findOrFail($visitorLog);
+        } elseif ($visitorLog->school_id !== $this->getSchoolId()) {
+            abort(403);
+        }
 
         if ($visitorLog->time_out) {
             return back()->with('error', 'Visitor has already checked out.');
@@ -131,9 +135,13 @@ class VisitorLogController extends Controller
         return back()->with('success', 'Visitor checked out. Badge returned.');
     }
 
-    public function destroy(VisitorLog $visitorLog)
+    public function destroy(mixed $visitorLog)
     {
-        if ($visitorLog->school_id !== $this->getSchoolId()) abort(403);
+        if (!$visitorLog instanceof VisitorLog) {
+            $visitorLog = VisitorLog::where('school_id', $this->getSchoolId())->findOrFail($visitorLog);
+        } elseif ($visitorLog->school_id !== $this->getSchoolId()) {
+            abort(403);
+        }
         $visitorLog->delete();
 
         return back()->with('success', 'Visitor log removed.');

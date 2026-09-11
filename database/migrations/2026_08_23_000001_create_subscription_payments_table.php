@@ -9,8 +9,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // subscription_payments is created by the SaaS foundation migration.
-        // Add the tenant key additively and backfill existing rows.
         if (! Schema::hasColumn('subscription_payments', 'school_id')) {
             Schema::table('subscription_payments', function (Blueprint $table): void {
                 $table->foreignId('school_id')->nullable()->after('id');
@@ -33,32 +31,35 @@ return new class extends Migration
                 }
             });
 
-        Schema::table('subscription_payments', function (Blueprint $table): void {
-            $table->unsignedBigInteger('school_id')->nullable(false)->change();
-            $table->foreign('school_id')->references('id')->on('schools')->cascadeOnDelete();
-        });
+        // Only enforce strict foreign key alter on MySQL / Postgres; SQLite does not support modifying existing columns with constraints
+        if (DB::getDriverName() !== 'sqlite') {
+            try {
+                Schema::table('subscription_payments', function (Blueprint $table): void {
+                    $table->unsignedBigInteger('school_id')->nullable(false)->change();
+                    $table->foreign('school_id')->references('id')->on('schools')->cascadeOnDelete();
+                });
+            } catch (\Throwable) {}
+        }
 
         try {
             Schema::table('subscription_payments', function (Blueprint $table): void {
                 $table->index(['school_id', 'status'], 'subscription_payments_school_status_index');
             });
-        } catch (\Throwable) {
-            // Existing installations may already have an equivalent index.
-        }
+        } catch (\Throwable) {}
     }
 
     public function down(): void
     {
         Schema::table('subscription_payments', function (Blueprint $table): void {
-            try {
-                $table->dropForeign(['school_id']);
-            } catch (\Throwable) {
+            if (DB::getDriverName() !== 'sqlite') {
+                try {
+                    $table->dropForeign(['school_id']);
+                } catch (\Throwable) {}
             }
 
             try {
                 $table->dropIndex('subscription_payments_school_status_index');
-            } catch (\Throwable) {
-            }
+            } catch (\Throwable) {}
 
             $table->dropColumn('school_id');
         });

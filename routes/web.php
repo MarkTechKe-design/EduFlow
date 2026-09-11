@@ -548,6 +548,12 @@ Route::middleware(['auth', 'active', 'role:super-admin'])->prefix('super-admin')
 
     Route::get('/settings', [\App\Http\Controllers\SuperAdmin\SettingsController::class, 'index'])->name('settings.index');
     Route::post('/settings/general', [\App\Http\Controllers\SuperAdmin\SettingsController::class, 'saveGeneral'])->name('settings.general');
+    Route::post('/settings/payment', [\App\Http\Controllers\SuperAdmin\SettingsController::class, 'savePayment'])->name('settings.payment');
+    Route::post('/settings/smtp', [\App\Http\Controllers\SuperAdmin\SettingsController::class, 'saveSmtp'])->name('settings.smtp');
+    Route::post('/settings/localization', [\App\Http\Controllers\SuperAdmin\SettingsController::class, 'saveLocalization'])->name('settings.localization');
+    Route::post('/settings/maintenance', [\App\Http\Controllers\SuperAdmin\SettingsController::class, 'saveMaintenance'])->name('settings.maintenance');
+    Route::post('/settings/storage', [\App\Http\Controllers\SuperAdmin\SettingsController::class, 'saveStorage'])->name('settings.storage');
+    Route::post('/settings/audit', [\App\Http\Controllers\SuperAdmin\SettingsController::class, 'saveAudit'])->name('settings.audit');
     Route::get('/system-health', [\App\Http\Controllers\SuperAdmin\SystemHealthController::class, 'index'])->name('system-health.index');
 
     // Module Manager

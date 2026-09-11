@@ -67,26 +67,26 @@ class SettingsController extends Controller
 
         if ($request->hasFile('logo')) {
             $old = PlatformSetting::get('platform_logo');
-            if ($old && Storage::disk('public')->exists($old)) {
-                Storage::disk('public')->delete($old);
+            if ($old && Storage::disk(config('filesystems.default'))->exists($old)) {
+                Storage::disk(config('filesystems.default'))->delete($old);
             }
-            PlatformSetting::set('platform_logo', $request->file('logo')->store('platform', 'public'), 'general');
+            PlatformSetting::set('platform_logo', $request->file('logo')->store('platform', config('filesystems.default')), 'general');
         }
 
         if ($request->hasFile('favicon')) {
             $old = PlatformSetting::get('platform_favicon');
-            if ($old && Storage::disk('public')->exists($old)) {
-                Storage::disk('public')->delete($old);
+            if ($old && Storage::disk(config('filesystems.default'))->exists($old)) {
+                Storage::disk(config('filesystems.default'))->delete($old);
             }
-            PlatformSetting::set('platform_favicon', $request->file('favicon')->store('platform', 'public'), 'general');
+            PlatformSetting::set('platform_favicon', $request->file('favicon')->store('platform', config('filesystems.default')), 'general');
         }
 
         if ($request->hasFile('login_background')) {
             $old = PlatformSetting::get('login_background');
-            if ($old && Storage::disk('public')->exists($old)) {
-                Storage::disk('public')->delete($old);
+            if ($old && Storage::disk(config('filesystems.default'))->exists($old)) {
+                Storage::disk(config('filesystems.default'))->delete($old);
             }
-            PlatformSetting::set('login_background', $request->file('login_background')->store('branding', 'public'), 'general');
+            PlatformSetting::set('login_background', $request->file('login_background')->store('branding', config('filesystems.default')), 'general');
         }
 
         if ($request->hasFile('register_backgrounds')) {
@@ -103,7 +103,7 @@ class SettingsController extends Controller
 
             foreach ($files as $file) {
                 if ($file && $file->isValid()) {
-                    $existing[] = $file->store('branding/register', 'public');
+                    $existing[] = $file->store('branding/register', config('filesystems.default'));
                 }
             }
             PlatformSetting::set('register_backgrounds', array_values(array_unique(array_filter($existing))), 'general');
@@ -126,8 +126,8 @@ class SettingsController extends Controller
         $existing = is_array($existing) ? $existing : [];
 
         if (in_array($path, $existing, true)) {
-            if (Storage::disk('public')->exists($path)) {
-                Storage::disk('public')->delete($path);
+            if (Storage::disk(config('filesystems.default'))->exists($path)) {
+                Storage::disk(config('filesystems.default'))->delete($path);
             }
             $updated = array_values(array_diff($existing, [$path]));
             PlatformSetting::set('register_backgrounds', $updated, 'general');

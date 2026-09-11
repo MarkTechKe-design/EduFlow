@@ -63,7 +63,7 @@ class WebsiteMediaController extends Controller
         $folder = trim($request->input('folder', 'general'), '/');
         $fileName = Str::slug(Str::limit(pathinfo($originalName, PATHINFO_FILENAME), 35, '')) . '-' . Str::random(6) . '.' . $extension;
 
-        $storagePath = $file->storeAs("media/{$folder}", $fileName, 'public');
+        $storagePath = $file->storeAs("media/{$folder}", $fileName, config('filesystems.default'));
 
         $inputTitle = $request->input('title', '');
         $safeTitle = (strlen($inputTitle) > 80 || preg_match('/^[a-zA-Z0-9\-_]{30,}/', $inputTitle))
@@ -72,7 +72,7 @@ class WebsiteMediaController extends Controller
 
         $media = WebsiteMedia::create([
             'public_id'   => (string) Str::uuid(),
-            'disk'        => 'public',
+            'disk'        => config('filesystems.default'),
             'path'        => $storagePath,
             'file_name'   => $fileName,
             'mime_type'   => $mimeType,

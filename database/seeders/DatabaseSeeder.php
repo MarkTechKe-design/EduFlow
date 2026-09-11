@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             AssessmentCoCurricularAndLogisticsSeeder::class,
             ParentStudentSyncSeeder::class,
             ComprehensiveEvaluationDataSeeder::class,
+            CompleteEvaluationDataSeeder::class,
             WebsiteSeeder::class,
             WebsitePageSeeder::class,
             WebsiteAboutSeeder::class,
@@ -27,4 +28,5 @@ class DatabaseSeeder extends Seeder
         ]);
     }
 }
+
 

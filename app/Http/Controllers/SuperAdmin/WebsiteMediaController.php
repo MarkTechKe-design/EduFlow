@@ -47,14 +47,6 @@ class WebsiteMediaController extends Controller
 
     public function store(Request $request): JsonResponse|RedirectResponse
     {
-        if ($request->hasFile('file') && !$request->file('file')->isValid()) {
-            $err = $request->file('file')->getErrorMessage();
-            return response()->json([
-                'success' => false,
-                'message' => 'PHP Upload Error: ' . $err,
-            ], 422);
-        }
-    {
         $request->validate([
             'file'     => ['required', 'file', 'max:51200'], // Up to 50MB
             'title'    => ['nullable', 'string', 'max:255'],

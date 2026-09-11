@@ -29,7 +29,7 @@ class WebsitePageSeeder extends Seeder
                         'content'    => [
                             'title'    => 'School operations, beautifully connected.',
                             'subtitle' => 'Empowering Kenyan schools with multi-tenant isolation, real-time M-Pesa tracking, and CBC academic grading.',
-                            'body'     => '<p>EduFlow is built ground-up to simplify daily school administration, from admissions and termly report broadsheets to driver transport manifests.</p>',
+                            'body'     => 'Transform administrative chaos into effortless clarity. EduFlow is the all-in-one platform designed to automate student admissions, streamline termly report broadsheets, and optimize transport logistics—giving your staff their time back.',
                         ],
                         'sort_order' => 1,
                     ],

@@ -634,17 +634,3 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/super-admin/leave-impersonation', [\App\Http\Controllers\SuperAdmin\ImpersonationController::class, 'leave'])
         ->name('super-admin.leave-impersonation');
 });
-// Temporary deployment route for running migrations and seeders on Render Free tier
-Route::get('/init-production-db/{secret}', function ($secret) {
-    if ($secret !== 'eduflow2026') {
-        abort(403, 'Unauthorized access.');
-    }
-
-    \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
-    $migrateOutput = \Illuminate\Support\Facades\Artisan::output();
-
-    \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
-    $seedOutput = \Illuminate\Support\Facades\Artisan::output();
-
-    return response("<pre>=== MIGRATIONS ===\n{$migrateOutput}\n=== SEEDERS ===\n{$seedOutput}</pre>");
-});

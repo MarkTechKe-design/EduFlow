@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             AcademicAndStudentRelationalSeeder::class,
             FinancialAndHRSeeder::class,
             AssessmentCoCurricularAndLogisticsSeeder::class,
+            ParentStudentSyncSeeder::class,
             WebsiteSeeder::class,
             WebsitePageSeeder::class,
             WebsiteAboutSeeder::class,

@@ -650,3 +650,18 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/super-admin/leave-impersonation', [\App\Http\Controllers\SuperAdmin\ImpersonationController::class, 'leave'])
         ->name('super-admin.leave-impersonation');
 });
+
+
+// Fallback direct storage file streamer for containerized environments without working symlinks
+Route::get('/storage/{path}', function ($path) {
+    if (!\Illuminate\Support\Facades\Storage::disk('public')->exists($path)) {
+        abort(404);
+    }
+    $file = \Illuminate\Support\Facades\Storage::disk('public')->get($path);
+    $type = \Illuminate\Support\Facades\Storage::disk('public')->mimeType($path) ?? 'application/octet-stream';
+
+    return response($file, 200, [
+        'Content-Type' => $type,
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
+})->where('path', '.*');

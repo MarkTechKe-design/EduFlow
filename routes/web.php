@@ -557,8 +557,8 @@ Route::middleware(['auth', 'active', 'role:super-admin'])->prefix('super-admin')
     Route::get('/modules', fn () => redirect()->route('super-admin.module-manager.index'));
 
     // Super Admin Visual CMS Studio
-    Route::resource('blogs', \App\Http\Controllers\SuperAdmin\BlogController::class);
-    Route::resource('faqs', \App\Http\Controllers\SuperAdmin\FaqController::class);
+    Route::resource('blogs', \App\Http\Controllers\SuperAdmin\BlogController::class)->except(['create', 'show', 'edit']);
+    Route::resource('faqs', \App\Http\Controllers\SuperAdmin\FaqController::class)->except(['create', 'show', 'edit']);
     Route::get('/website/pages', [\App\Http\Controllers\SuperAdmin\WebsitePageController::class, 'index'])->name('website.pages.index');
     Route::post('/website/pages', [\App\Http\Controllers\SuperAdmin\WebsitePageController::class, 'store'])->name('website.pages.store');
     Route::put('/website/pages/{websitePage}', [\App\Http\Controllers\SuperAdmin\WebsitePageController::class, 'update'])->name('website.pages.update');

@@ -13,7 +13,7 @@ class SchoolSubscription extends Model
     use BelongsToSchool, SoftDeletes;
 
     protected $fillable = [
-        'school_id', 'package_id', 'billing_cycle', 'coupon_id', 'start_date', 'end_date', 'paystack_customer_code', 'paystack_authorization_code', 'card_last4', 'card_brand', 'card_exp_month', 'card_exp_year',
+        'school_id', 'package_id', 'billing_cycle', 'coupon_id', 'start_date', 'end_date', 'paystack_reference', 'paystack_customer_code', 'paystack_authorization_code', 'card_last4', 'card_brand', 'card_exp_month', 'card_exp_year',
         'status', 'lifecycle_status', 'is_trial', 'trial_ends_at', 'grace_period_ends_at', 'renewal_at', 'cancelled_at', 'archived_at', 'public_id', 'amount_paid', 'payment_method', 'notes',
     ];
 

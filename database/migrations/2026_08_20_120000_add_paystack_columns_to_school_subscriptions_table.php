@@ -12,6 +12,9 @@ return new class extends Migration
             if (!Schema::hasColumn('school_subscriptions', 'billing_cycle')) {
                 $table->string('billing_cycle', 20)->default('monthly')->after('package_id');
             }
+            if (!Schema::hasColumn('school_subscriptions', 'paystack_reference')) {
+                $table->string('paystack_reference', 100)->nullable()->after('payment_method');
+            }
             if (!Schema::hasColumn('school_subscriptions', 'paystack_customer_code')) {
                 $table->string('paystack_customer_code', 100)->nullable()->after('payment_method');
             }
@@ -36,7 +39,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('school_subscriptions', function (Blueprint $table) {
-            $cols = ['billing_cycle', 'paystack_customer_code', 'paystack_authorization_code', 'card_last4', 'card_brand', 'card_exp_month', 'card_exp_year'];
+            $cols = ['billing_cycle', 'paystack_reference', 'paystack_customer_code', 'paystack_authorization_code', 'card_last4', 'card_brand', 'card_exp_month', 'card_exp_year'];
             foreach ($cols as $col) {
                 if (Schema::hasColumn('school_subscriptions', $col)) {
                     $table->dropColumn($col);

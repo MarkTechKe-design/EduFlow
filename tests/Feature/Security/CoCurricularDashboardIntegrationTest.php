@@ -11,10 +11,11 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
+use Tests\Support\CreatesSecurityFixtures;
 
 class CoCurricularDashboardIntegrationTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, CreatesSecurityFixtures;
 
     private School $school;
     private SchoolClass $class;
@@ -32,6 +33,14 @@ class CoCurricularDashboardIntegrationTest extends TestCase
             'name'   => 'Dashboard Test School',
             'slug'   => 'dash-school-' . uniqid(),
             'status' => 'active',
+            'onboarding_completed_at' => now(),
+        ]);
+
+        $this->createSecuritySubscription($this->school);
+        SchoolModule::create([
+            'school_id'   => $this->school->id,
+            'module_slug' => 'cocurricular',
+            'is_enabled'  => true,
         ]);
 
         $this->class = SchoolClass::create([
@@ -96,11 +105,10 @@ class CoCurricularDashboardIntegrationTest extends TestCase
 
     public function test_school_admin_dashboard_hides_cocurricular_summary_when_disabled(): void
     {
-        SchoolModule::create([
-            'school_id'   => $this->school->id,
-            'module_slug' => 'cocurricular',
-            'is_enabled'  => false,
-        ]);
+        SchoolModule::updateOrCreate(
+            ['school_id' => $this->school->id, 'module_slug' => 'cocurricular'],
+            ['is_enabled' => false]
+        );
 
         $response = $this->actingAs($this->admin)->get(route('dashboard'));
 
@@ -125,11 +133,10 @@ class CoCurricularDashboardIntegrationTest extends TestCase
 
     public function test_student_dashboard_hides_talent_summary_when_disabled(): void
     {
-        SchoolModule::create([
-            'school_id'   => $this->school->id,
-            'module_slug' => 'cocurricular',
-            'is_enabled'  => false,
-        ]);
+        SchoolModule::updateOrCreate(
+            ['school_id' => $this->school->id, 'module_slug' => 'cocurricular'],
+            ['is_enabled' => false]
+        );
 
         $response = $this->actingAs($this->studentUser)->get(route('student.dashboard'));
 
@@ -154,11 +161,10 @@ class CoCurricularDashboardIntegrationTest extends TestCase
 
     public function test_parent_dashboard_hides_child_talent_highlights_when_disabled(): void
     {
-        SchoolModule::create([
-            'school_id'   => $this->school->id,
-            'module_slug' => 'cocurricular',
-            'is_enabled'  => false,
-        ]);
+        SchoolModule::updateOrCreate(
+            ['school_id' => $this->school->id, 'module_slug' => 'cocurricular'],
+            ['is_enabled' => false]
+        );
 
         $response = $this->actingAs($this->parentUser)->get(route('parent.dashboard'));
 

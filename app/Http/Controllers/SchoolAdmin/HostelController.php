@@ -341,4 +341,44 @@ class HostelController extends Controller
         }
         return response()->json(['status' => 'ok']);
     }
+
+    /**
+     * Display student hostel room allocations view.
+     */
+    public function allocations(Request $request): Response
+    {
+        $this->authorize('viewAny', Hostel::class);
+        $sid = $this->getSchoolId();
+
+        $allocations = HostelAllocation::with([
+            'student:id,first_name,last_name,admission_no,class_id',
+            'student.schoolClass:id,name',
+            'hostel:id,name,type',
+            'room:id,room_no,floor,type',
+        ])
+            ->where('school_id', $sid)
+            ->when($request->hostel_id && $request->hostel_id !== 'all', fn ($q) => $q->where('hostel_id', $request->hostel_id))
+            ->when($request->status && $request->status !== 'all', fn ($q) => $q->where('status', $request->status))
+            ->latest()
+            ->paginate(15, ['*'], 'allocations_page')
+            ->withQueryString();
+
+        $hostels = Hostel::where('school_id', $sid)->select('id', 'name', 'type')->get();
+        $rooms = HostelRoom::where('school_id', $sid)->get();
+        $students = Student::where('school_id', $sid)
+            ->where('status', 'active')
+            ->with('schoolClass:id,name')
+            ->get(['id', 'first_name', 'last_name', 'admission_no', 'class_id']);
+
+        return Inertia::render('SchoolAdmin/Hostel/Allocations', [
+            'allocations' => $allocations,
+            'hostels'     => $hostels,
+            'rooms'       => $rooms,
+            'students'    => $students,
+            'filters'     => [
+                'hostel_id' => $request->input('hostel_id', 'all'),
+                'status'    => $request->input('status', 'all'),
+            ],
+        ]);
+    }
 }

@@ -14,10 +14,11 @@ use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
+use Tests\Support\CreatesSecurityFixtures;
 
 class HomeworkStorageSecurityTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, CreatesSecurityFixtures;
 
     protected function createTestSchool(string $name = 'Test Academy'): array
     {
@@ -35,7 +36,10 @@ class HomeworkStorageSecurityTest extends TestCase
             'curriculum'              => 'cbc',
             'status'                  => 'active',
             'onboarding_completed_at' => now(),
+            'verification_status'     => 'verified',
         ]);
+
+        $this->createSecuritySubscription($school);
 
         $user = User::create([
             'school_id' => $school->id,

@@ -14,9 +14,12 @@ use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
+use Tests\Support\CreatesSecurityFixtures;
 
 class OnlineClassSecurityTest extends TestCase
 {
+    use CreatesSecurityFixtures;
+
     use RefreshDatabase;
 
     private int $schoolCounter = 0;
@@ -36,14 +39,18 @@ class OnlineClassSecurityTest extends TestCase
     private function createSchool(array $attributes = []): School
     {
         $this->schoolCounter++;
-        return School::create(array_merge([
+        $school = School::create(array_merge([
             'name'     => "Test School {$this->schoolCounter}",
             'slug'     => "test-school-{$this->schoolCounter}-" . Str::random(6),
-            'status'   => 'active',
+            'status'                  => 'active',
+            'verification_status'     => 'verified',
+            'onboarding_completed_at' => now(),
             'email'    => "school{$this->schoolCounter}@example.test",
             'currency' => 'KES',
             'timezone' => 'Africa/Nairobi',
         ], $attributes));
+        $this->createSecuritySubscription($school);
+        return $school;
     }
 
     private function createUser(School $school, string $role, array $attributes = []): User

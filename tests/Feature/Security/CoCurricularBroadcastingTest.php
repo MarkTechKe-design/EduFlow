@@ -15,10 +15,11 @@ use Illuminate\Support\Facades\Event;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
+use Tests\Support\CreatesSecurityFixtures;
 
 class CoCurricularBroadcastingTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, CreatesSecurityFixtures;
 
     private School $schoolA;
     private School $schoolB;
@@ -34,14 +35,20 @@ class CoCurricularBroadcastingTest extends TestCase
             'name'   => 'Broadcasting Test School A',
             'slug'   => 'broadcasting-school-a-' . uniqid(),
             'status' => 'active',
+            'verification_status' => 'verified',
+            'onboarding_completed_at' => now(),
         ]);
 
         $this->schoolB = School::create([
             'name'   => 'Broadcasting Test School B',
             'slug'   => 'broadcasting-school-b-' . uniqid(),
             'status' => 'active',
+            'verification_status' => 'verified',
+            'onboarding_completed_at' => now(),
         ]);
 
+        $this->createSecuritySubscription($this->schoolA);
+        $this->createSecuritySubscription($this->schoolB);
         Permission::firstOrCreate(['name' => 'activities.results', 'guard_name' => 'web']);
         Permission::firstOrCreate(['name' => 'activities.manage', 'guard_name' => 'web']);
         Permission::firstOrCreate(['name' => 'activities.view', 'guard_name' => 'web']);

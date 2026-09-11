@@ -704,4 +704,54 @@ class StudentController extends Controller
 
         return back()->with('success', 'Document deleted successfully.');
     }
+
+    /**
+     * Upload and attach a document to a student profile.
+     */
+    public function uploadDocument(Request $request, Student $student): RedirectResponse
+    {
+        $schoolId = auth()->user()->school_id;
+        if (!auth()->user()->hasRole('super-admin') && (int) $student->school_id !== (int) $schoolId) {
+            abort(403, 'Cross-tenant document upload denied.');
+        }
+
+        $validated = $request->validate([
+            'title'       => ['required', 'string', 'max:255'],
+            'document'    => ['nullable', 'file', 'max:10240'],
+            'file'        => ['nullable', 'file', 'max:10240'],
+            'category'    => ['nullable', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $file = $request->file('document') ?? $request->file('file');
+        if (! $file) {
+            return back()->withErrors(['document' => 'A valid file must be uploaded.']);
+        }
+
+        $path = $file->store("schools/{$schoolId}/students/{$student->id}/documents", 'private');
+
+        $payload = [
+            'school_id'   => $student->school_id,
+            'student_id'  => $student->id,
+            'title'       => $validated['title'],
+            'file_path'   => $path,
+            'file_type'   => $file->getClientMimeType(),
+            'file_size'   => $file->getSize(),
+            'uploaded_by' => auth()->id(),
+        ];
+
+        if (\Illuminate\Support\Facades\Schema::hasColumn('student_documents', 'file_name')) {
+            $payload['file_name'] = $file->getClientOriginalName();
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('student_documents', 'category')) {
+            $payload['category'] = $validated['category'] ?? 'general';
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('student_documents', 'description')) {
+            $payload['description'] = $validated['description'] ?? null;
+        }
+
+        \App\Models\StudentDocument::create($payload);
+
+        return back()->with('success', 'Document uploaded successfully.');
+    }
 }

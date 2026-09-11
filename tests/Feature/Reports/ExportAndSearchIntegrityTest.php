@@ -11,10 +11,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
+use Tests\Support\CreatesSecurityFixtures;
+use App\Models\SchoolModule;
 
 class ExportAndSearchIntegrityTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, CreatesSecurityFixtures;
 
     protected School $schoolA;
     protected School $schoolB;
@@ -54,8 +56,10 @@ class ExportAndSearchIntegrityTest extends TestCase
             'timezone'                => 'Africa/Nairobi',
             'curriculum'              => 'cbc',
             'onboarding_completed_at' => now(),
-        ]);
+            'verification_status'     => 'verified',
+                    ]);
 
+        
         $this->adminA = (new User)->forceFill([
             'school_id'         => $this->schoolA->id,
             'name'              => 'Admin School A',
@@ -93,7 +97,17 @@ class ExportAndSearchIntegrityTest extends TestCase
             'timezone'                => 'Africa/Nairobi',
             'curriculum'              => 'cbc',
             'onboarding_completed_at' => now(),
-        ]);
+            'verification_status'     => 'verified',
+                    ]);
+
+        
+        $this->createSecuritySubscription($this->schoolA);
+        $this->createSecuritySubscription($this->schoolB);
+
+        foreach (['students', 'staff', 'fees', 'reports', 'admissions', 'settings'] as $m) {
+            SchoolModule::create(['school_id' => $this->schoolA->id, 'module_slug' => $m, 'is_enabled' => true]);
+            SchoolModule::create(['school_id' => $this->schoolB->id, 'module_slug' => $m, 'is_enabled' => true]);
+        }
 
         $this->adminB = (new User)->forceFill([
             'school_id'         => $this->schoolB->id,

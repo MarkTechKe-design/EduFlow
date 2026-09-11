@@ -629,7 +629,7 @@ class AttendanceController extends Controller
             'replacement_staff_id' => $validated['replacement_staff_id'] ?: null,
             'replacement_reason' => $validated['replacement_reason'] ?: null,
             'replacement_scope' => $validated['replacement_scope'] ?? 'full_week',
-            'replacement_time_window' => $validated['replacement_time_window'] ?: null,
+            'replacement_time_window' => ($validated['replacement_time_window'] ?? null),
             'replacement_changed_by' => auth()->id(),
             'replacement_at' => now(),
         ]);
@@ -790,6 +790,46 @@ class AttendanceController extends Controller
         return Inertia::render('SchoolAdmin/Attendance/TeacherProfile', [
             'profile' => $profile,
             'filters' => $filters,
+        ]);
+    }
+
+    /**
+     * Display monthly attendance calendar for a specific student.
+     */
+    public function studentCalendar(Request $request, Student $student): Response
+    {
+        $sid = $this->getSchoolId();
+
+        if ((int) $student->school_id !== (int) $sid && !auth()->user()->hasRole('super-admin')) {
+            abort(403, 'Cross-tenant student access denied.');
+        }
+
+        $month = $request->input('month', now()->format('Y-m'));
+        [$year, $mon] = explode('-', $month);
+
+        $attendances = Attendance::withoutGlobalScopes()
+            ->where('school_id', $sid)
+            ->where('attendable_type', Student::class)
+            ->where('attendable_id', $student->id)
+            ->whereYear('date', (int) $year)
+            ->whereMonth('date', (int) $mon)
+            ->get();
+
+        $records = [];
+        foreach ($attendances as $att) {
+            $dateKey = $att->date instanceof \Carbon\CarbonInterface ? $att->date->toDateString() : (string) $att->date;
+            $records[$dateKey] = [
+                'date'    => $dateKey,
+                'date'    => $att->date,
+                'status'  => $att->status ?? 'present',
+                'remarks' => $att->remarks,
+            ];
+        }
+
+        return Inertia::render('SchoolAdmin/Attendance/StudentCalendar', [
+            'student' => $student->load('schoolClass'),
+            'records' => (object) $records,
+            'month'   => $month,
         ]);
     }
 }

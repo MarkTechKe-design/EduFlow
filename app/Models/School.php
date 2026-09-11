@@ -95,4 +95,9 @@ class School extends Model
     {
         return $this->hasOne(SchoolSubscription::class)->latestOfMany();
     }
+
+    public function verifiedByUser()
+    {
+        return $this->belongsTo(User::class, 'verified_by');
+    }
 }

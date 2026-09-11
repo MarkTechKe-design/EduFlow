@@ -10,10 +10,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
+use Tests\Support\CreatesSecurityFixtures;
+use App\Models\SchoolModule;
 
 class Track85DataOperationsTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, CreatesSecurityFixtures;
 
     protected School $schoolA;
     protected School $schoolB;
@@ -32,6 +34,8 @@ class Track85DataOperationsTest extends TestCase
         $permissions = [
             'staff.view', 'staff.create', 'staff.edit', 'staff.delete',
             'settings.view', 'settings.edit',
+            'reports.export',
+            'visitors.view', 'visitors.export', 'admissions.view',
         ];
         foreach ($permissions as $p) {
             Permission::firstOrCreate(['name' => $p, 'guard_name' => 'web']);
@@ -49,8 +53,10 @@ class Track85DataOperationsTest extends TestCase
             'timezone'                => 'Africa/Nairobi',
             'curriculum'              => 'cbc',
             'onboarding_completed_at' => now(),
-        ]);
+            'verification_status'     => 'verified',
+                    ]);
 
+        
         $this->adminA = (new User)->forceFill([
             'school_id'         => $this->schoolA->id,
             'name'              => 'Admin 85 A',
@@ -71,7 +77,17 @@ class Track85DataOperationsTest extends TestCase
             'timezone'                => 'Africa/Nairobi',
             'curriculum'              => 'cbc',
             'onboarding_completed_at' => now(),
-        ]);
+            'verification_status'     => 'verified',
+                    ]);
+
+        
+        $this->createSecuritySubscription($this->schoolA);
+        $this->createSecuritySubscription($this->schoolB);
+
+        foreach (['students', 'staff', 'fees', 'reports', 'admissions', 'settings'] as $m) {
+            SchoolModule::create(['school_id' => $this->schoolA->id, 'module_slug' => $m, 'is_enabled' => true]);
+            SchoolModule::create(['school_id' => $this->schoolB->id, 'module_slug' => $m, 'is_enabled' => true]);
+        }
 
         $this->adminB = (new User)->forceFill([
             'school_id'         => $this->schoolB->id,

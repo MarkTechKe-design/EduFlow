@@ -62,6 +62,7 @@ class RouteAuthorizationTest extends SecurityTestCase
 
     public function test_a_school_administrator_can_access_an_authorized_school_route(): void
     {
+        
         $school = $this->createSecuritySchool();
         $user = $this->createRoleUser('school-admin', 'authorized-school-admin@example.test', $school);
         $this->actingAs($user)->get('/school/settings')->assertOk();
